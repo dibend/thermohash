@@ -22,6 +22,10 @@ PASSWORD = config["password"]
 # Temperature thresholds and power targets (ensure they are handled as floats)
 TEMP_THRESHOLDS = {float(threshold): float(power) for threshold, power in config["temp_thresholds"].items()}
 
+# Get max and min power targets from the configuration
+MAX_POWER = max(TEMP_THRESHOLDS.values())
+MIN_POWER = min(TEMP_THRESHOLDS.values())
+
 # Function to get the current temperature using Open-Meteo API
 def get_current_temperature(lat, lon):
     logging.debug(f"Fetching current temperature for coordinates: {lat}, {lon}")
@@ -74,12 +78,18 @@ def adjust_power_based_on_weather():
 
     # Determine the appropriate power target based on the temperature thresholds
     power_target = None
-    for threshold, power in sorted(TEMP_THRESHOLDS.items()):
-        logging.debug(f"Checking if temperature {temperature}°C <= threshold {threshold}°C")
-        if temperature <= threshold:
-            power_target = power
-            logging.debug(f"Temperature {temperature}°C is below or equal to {threshold}°C, setting power to {power_target} watts")
-            break
+    if temperature <= min(TEMP_THRESHOLDS):
+        power_target = MIN_POWER  # Set to minimum power if below lowest threshold
+        logging.debug(f"Temperature {temperature}°C is below the lowest threshold. Setting power to minimum: {MIN_POWER} watts.")
+    elif temperature >= max(TEMP_THRESHOLDS):
+        power_target = MAX_POWER  # Set to maximum power if above highest threshold
+        logging.debug(f"Temperature {temperature}°C is above the highest threshold. Setting power to maximum: {MAX_POWER} watts.")
+    else:
+        for threshold, power in sorted(TEMP_THRESHOLDS.items()):
+            if temperature <= threshold:
+                power_target = power
+                logging.debug(f"Temperature {temperature}°C is below or equal to {threshold}°C, setting power to {power_target} watts")
+                break
 
     if power_target is not None:
         # Authenticate to get the token

@@ -1,21 +1,22 @@
 
 # ThermoHash - Miner Power Management Script Using `grpcurl`
 
-**ThermoHash** is a Python script that dynamically adjusts the power target of your Braiins OS miner based on current weather conditions. The script fetches weather data and modifies the miner’s power consumption accordingly using **gRPC** and `grpcurl`.
+**ThermoHash** is a Python script that dynamically adjusts the power target of your Braiins OS miner based on current weather conditions. It fetches weather data and modifies the minerâ€™s power consumption accordingly using **gRPC** and `grpcurl`.
 
 ## Features
 - Automatically adjusts the miner's power target based on temperature thresholds.
 - Utilizes `grpcurl` to communicate with Braiins OS over gRPC.
 - Works with miners running **Braiins OS**.
-- Compatible with Windows.
+- Compatible with **Windows** and **Linux**.
+
+---
 
 ## Prerequisites
 
-1. **Windows Operating System**.
-2. **Python 3.x** installed.
-3. **`grpcurl`** installed.
-4. **Braiins OS** installed on your miner.
-5. **Port 50051** open and accessible on your miner for gRPC communication.
+1. **Python 3.x** installed.
+2. **`grpcurl`** installed.
+3. **Braiins OS** installed on your miner.
+4. **Port 50051** open and accessible on your miner for gRPC communication.
 
 ---
 
@@ -38,7 +39,7 @@ This script requires `requests` for fetching weather data and `schedule` for sch
    ```bash
    pip install requests schedule
    ```
-password
+
 ### Step 3: Download and Install `grpcurl`
 
 1. Download `grpcurl` from the official [GitHub Releases page](https://github.com/fullstorydev/grpcurl/releases).
@@ -60,7 +61,7 @@ iptables -A INPUT -p tcp --dport 50051 -j ACCEPT
 
 ### Step 5: Configure the Script
 
-Create a `config.json` file in the same directory as the script to store the miner’s IP/hostname, weather thresholds, and your credentials.
+Create a `config.json` file in the same directory as the script to store the minerâ€™s IP/hostname, weather thresholds, and your credentials.
 
 Example `config.json`:
 ```json
@@ -86,13 +87,91 @@ Example `config.json`:
 ### Step 6: Run the Script
 
 1. Download the `thermohash.py` Python script and place it in the same directory as `config.json`.
-2. Open a Command Prompt and navigate to the script’s directory.
+2. Open a Command Prompt and navigate to the scriptâ€™s directory.
 3. Run the script:
    ```bash
    python thermohash.py
    ```
 
 The script will immediately adjust the miner's power target and continue to do so every 10 minutes.
+
+---
+
+## Setup Instructions for Linux
+
+### Step 1: Install Python and Required Libraries
+
+1. Ensure Python 3.x is installed. Install it with:
+   ```bash
+   sudo apt update
+   sudo apt install python3 python3-pip
+   ```
+2. Install required Python libraries:
+   ```bash
+   pip3 install requests schedule
+   ```
+
+### Step 2: Install `grpcurl`
+
+1. Download `grpcurl` from the [GitHub Releases page](https://github.com/fullstorydev/grpcurl/releases).
+2. Extract the downloaded file and move `grpcurl` to `/usr/local/bin`:
+   ```bash
+   sudo mv grpcurl /usr/local/bin
+   ```
+3. Verify the installation by running:
+   ```bash
+   grpcurl --version
+   ```
+
+### Step 3: Open Port 50051 on Your Miner
+
+Ensure that port **50051** is open on your miner. SSH into your miner and open the port using the system's firewall management tool (such as `firewalld`, `ufw`, or `iptables`).
+
+Example using **iptables**:
+```bash
+sudo iptables -A INPUT -p tcp --dport 50051 -j ACCEPT
+sudo iptables-save > /etc/iptables/rules.v4
+```
+
+### Step 4: Configure the Script
+
+Follow the same instructions as for Windows to create the `config.json` file.
+
+### Step 5: Run the Script
+
+1. Open a terminal and navigate to the scriptâ€™s directory.
+2. Run the script:
+   ```bash
+   python3 thermohash.py
+   ```
+
+### Optional: Set Up as a Systemd Service
+
+To run the script automatically on startup and keep it running, you can set it up as a systemd service.
+
+1. Create a service file:
+   ```bash
+   sudo nano /etc/systemd/system/thermohash.service
+   ```
+2. Add the following configuration:
+   ```ini
+   [Unit]
+   Description=ThermoHash Miner Power Management
+   After=network.target
+
+   [Service]
+   ExecStart=/usr/bin/python3 /path/to/thermohash.py
+   Restart=always
+   User=yourusername
+
+   [Install]
+   WantedBy=multi-user.target
+   ```
+3. Enable and start the service:
+   ```bash
+   sudo systemctl enable thermohash.service
+   sudo systemctl start thermohash.service
+   ```
 
 ---
 
@@ -115,7 +194,7 @@ To manually test the `grpcurl` commands:
 ## Troubleshooting
 
 - **Connection Refused**: Ensure that port 50051 is open on your miner and accessible from your network.
-- **`grpcurl` Not Found**: Ensure `grpcurl.exe` is in your system’s `PATH`.
+- **`grpcurl` Not Found**: Ensure `grpcurl` is in your systemâ€™s `PATH`.
 - **Incorrect Weather Data**: Verify the latitude and longitude values in `config.json`.
 
 ---

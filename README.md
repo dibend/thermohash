@@ -1,4 +1,4 @@
-<img src="https://njweb.solutions/img/20241209_123622.jpg" width="90%"><b
+<img src="https://njweb.solutions/img/ThermoHashLogo.gif" width="90%"><b
 r>
 # ThermoHash - Miner Power Management Script Using `grpcurl`
 

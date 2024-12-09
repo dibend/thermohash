@@ -1,4 +1,5 @@
-
+<img src="https://njweb.solutions/img/20241209_123622.jpg" width="90%"><b
+r>
 # ThermoHash - Miner Power Management Script Using `grpcurl`
 
 **ThermoHash** is a Python script that dynamically adjusts the power target of your Braiins OS miner based on current weather conditions. It fetches weather data and modifies the minerâ€™s power consumption accordingly using **gRPC** and `grpcurl`.

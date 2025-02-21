@@ -195,7 +195,7 @@ To manually test the `grpcurl` commands:
 ## Troubleshooting
 
 - **Connection Refused**: Ensure that port 50051 is open on your miner and accessible from your network.
-- **`grpcurl` Not Found**: Ensure `grpcurl` is in your systemâ€™s `PATH`.
+- **`grpcurl` Not Found**: Ensure `grpcurl` is in your system's `PATH`.
 - **Incorrect Weather Data**: Verify the latitude and longitude values in `config.json`.
 
 ---

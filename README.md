@@ -1,7 +1,10 @@
+## New: ThermoHash Version S9
+Learn more about ThermoHash version S9 [here](https://github.com/dibend/thermohash/releases/tag/vS9).
+<hr>
+
 <img src="https://njweb.solutions/img/ThermoHashLogo.gif" width="90%"><b
 r>
 # ThermoHash - Miner Power Management Script Using `grpcurl`
-
 **ThermoHash** is a Python script that dynamically adjusts the power target of your Braiins OS miner based on current weather conditions. It fetches weather data and modifies the minerâ€™s power consumption accordingly using **gRPC** and `grpcurl`.
 
 ## Features
@@ -205,3 +208,6 @@ To manually test the `grpcurl` commands:
 - **Braiins OS**: [Braiins OS Official Site](https://braiins.com/os)
 - **grpcurl**: [grpcurl GitHub](https://github.com/fullstorydev/grpcurl)
 - **Python**: [Python Official Site](https://www.python.org/downloads/)
+
+## Compatibility with AltairTech's BitChimney
+ThermoHash is now compatible with AltairTech's BitChimney. BitChimney enhances ThermoHash's capabilities by providing more efficient power management and additional configuration options. For more details, visit [AltairTech's BitChimney](https://altairtech.io/product/bitchimney/?srsltid=AfmBOoqnhF02WvDTAmUuJz-_YXwjuwLPuZlx2TcJ8JoVt1ODGnEYLrGB).

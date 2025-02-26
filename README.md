@@ -211,3 +211,4 @@ To manually test the `grpcurl` commands:
 
 ## Compatibility with AltairTech's BitChimney
 ThermoHash is now compatible with AltairTech's BitChimney. BitChimney enhances ThermoHash's capabilities by providing more efficient power management and additional configuration options. For more details, visit [AltairTech's BitChimney](https://altairtech.io/product/bitchimney/?srsltid=AfmBOoqnhF02WvDTAmUuJz-_YXwjuwLPuZlx2TcJ8JoVt1ODGnEYLrGB).
+<img src="https://altairtech.io/wp-content/uploads/2023/09/Bitchimneyv2_1.png" width="90%">

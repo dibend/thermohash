@@ -1,5 +1,5 @@
 ## New: ThermoHash Version S9
-Learn more about ThermoHash version S9 [here](https://github.com/dibend/thermohash/releases/tag/vS9).
+Learn more about ThermoHash version S9 [here](https://github.com/dibend/Thermohash_Version_S9).
 <hr>
 
 <img src="https://njweb.solutions/img/ThermoHashLogo.gif" width="90%"><b

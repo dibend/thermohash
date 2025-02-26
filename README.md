@@ -212,3 +212,11 @@ To manually test the `grpcurl` commands:
 ## Compatibility with AltairTech's BitChimney
 ThermoHash is now compatible with AltairTech's BitChimney. BitChimney enhances ThermoHash's capabilities by providing more efficient power management and additional configuration options. For more details, visit [AltairTech's BitChimney](https://altairtech.io/product/bitchimney/?srsltid=AfmBOoqnhF02WvDTAmUuJz-_YXwjuwLPuZlx2TcJ8JoVt1ODGnEYLrGB).
 <img src="https://altairtech.io/wp-content/uploads/2023/09/Bitchimneyv2_1.png" width="90%">
+
+Also compatible with
+## StealthMiner JPro+
+
+[![StealthMiner JPro+](https://structur3.io/cdn/shop/files/stealthminer-v1.1-black-01.jpg?v=1737642194)](https://structur3.io/products/stealthminer)
+
+The StealthMiner JPro+ is a SHA256 miner available on [Structur3.io](https://structur3.io/products/stealthminer). This efficient miner operates at 20-32TH with an average performance of 24-26 J/T in the 500-800W range. Designed for longevity and quiet operation on standard North American 120V circuits, it utilizes recycled JPro+ Hashboards and APW3++ PSUs, down clocked for efficiency. Its cooling system ensures tighter operating temperature gradients under 60dB. Powered by an AMLogic A113D Control Board running LuxOS firmware, it includes standard mining I/O and comes with a 14-day warranty. Please review the specifications for power, hardware, and environmental requirements.
+

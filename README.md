@@ -1,3 +1,5 @@
+# Smart Bitcoin Heater App
+
 ## New: ThermoHash Version S9
 Learn more about ThermoHash version S9 [here](https://github.com/dibend/Thermohash_Version_S9).
 <hr>

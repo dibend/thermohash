@@ -67,7 +67,7 @@ iptables -A INPUT -p tcp --dport 50051 -j ACCEPT
 
 ### Step 5: Configure the Script
 
-Create a `config.json` file in the same directory as the script to store the minerâ€™s IP/hostname, weather thresholds, and your credentials.
+Create a `config.json` file in the same directory as the script to store the miner's IP/hostname, weather thresholds, and your credentials.
 
 Example `config.json`:
 ```json

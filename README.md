@@ -1,6 +1,7 @@
 # Smart Bitcoin Heater App
-
-## New: ThermoHash Version S9
+### New - Ubibot Indoor Sensor ThermoHash Version S9
+Get it [here](https://github.com/dibend/Ubibot-S9-ThermoHash)
+### ThermoHash Version S9
 Learn more about ThermoHash version S9 [here](https://github.com/dibend/Thermohash_Version_S9).
 <hr>
 

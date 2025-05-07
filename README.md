@@ -224,17 +224,26 @@ Also compatible with
 The StealthMiner JPro+ is a SHA256 miner available on [Structur3.io](https://structur3.io/products/stealthminer). This efficient miner operates at 20-32TH with an average performance of 24-26 J/T in the 500-800W range. Designed for longevity and quiet operation on standard North American 120V circuits, it utilizes recycled JPro+ Hashboards and APW3++ PSUs, down clocked for efficiency. Its cooling system ensures tighter operating temperature gradients under 60dB. Powered by an AMLogic A113D Control Board running LuxOS firmware, it includes standard mining I/O and comes with a 14-day warranty. Please review the specifications for power, hardware, and environmental requirements.
 
 <p align="center">
-  <img src="Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_4.jpg" alt="Heat Recovery Guide 4">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_1.jpg" alt="Heat Recovery Guide 1">
 </p>
 <p align="center">
-  <img src="Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_5.jpg" alt="Heat Recovery Guide 5">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_2.jpg" alt="Heat Recovery Guide 2">
 </p>
 <p align="center">
-  <img src="Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_6.jpg" alt="Heat Recovery Guide 6">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_3.jpg" alt="Heat Recovery Guide 3">
 </p>
 <p align="center">
-  <img src="Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_7.jpg" alt="Heat Recovery Guide 7">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_4.jpg" alt="Heat Recovery Guide 4">
 </p>
 <p align="center">
-  <img src="Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_8.jpg" alt="Heat Recovery Guide 8">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_5.jpg" alt="Heat Recovery Guide 5">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_6.jpg" alt="Heat Recovery Guide 6">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_7.jpg" alt="Heat Recovery Guide 7">
+</p>
+<p align="center">
+  <img src="https://raw.githubusercontent.com/dibend/thermohash/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20_250305_072742_8.jpg" alt="Heat Recovery Guide 8">
 </p>

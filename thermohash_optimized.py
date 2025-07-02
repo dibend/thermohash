@@ -3,6 +3,7 @@
 ThermoHash Optimized - Smart Bitcoin Miner Power Management
 Uses OpenMeteo API weather predictions and TensorFlow CPU for optimal power management
 Cross-platform compatible (Linux/Windows)
+Features automatic IP-based geolocation
 """
 
 import schedule
@@ -33,6 +34,93 @@ try:
 except ImportError:
     print("Warning: TensorFlow or scikit-learn not available. ML optimization disabled.")
     TF_AVAILABLE = False
+
+class GeolocationService:
+    """Handles automatic geolocation detection based on IP address"""
+    
+    def __init__(self):
+        self.geolocation_apis = [
+            {
+                'name': 'ipapi.co',
+                'url': 'https://ipapi.co/json/',
+                'lat_key': 'latitude',
+                'lon_key': 'longitude',
+                'timeout': 10
+            },
+            {
+                'name': 'ipinfo.io',
+                'url': 'https://ipinfo.io/json',
+                'lat_key': 'loc',  # Special handling needed - "lat,lon" format
+                'lon_key': 'loc',
+                'timeout': 10
+            },
+            {
+                'name': 'ip-api.com',
+                'url': 'http://ip-api.com/json/',
+                'lat_key': 'lat',
+                'lon_key': 'lon',
+                'timeout': 10
+            }
+        ]
+    
+    def get_location_from_ip(self) -> Optional[Tuple[float, float]]:
+        """
+        Automatically detect location based on IP address
+        Returns: (latitude, longitude) tuple or None if failed
+        """
+        for api in self.geolocation_apis:
+            try:
+                logging.info(f"Attempting geolocation with {api['name']}")
+                response = requests.get(api['url'], timeout=api['timeout'])
+                response.raise_for_status()
+                data = response.json()
+                
+                # Handle different API response formats
+                if api['name'] == 'ipinfo.io':
+                    # ipinfo.io returns loc as "lat,lon" string
+                    if 'loc' in data:
+                        lat_str, lon_str = data['loc'].split(',')
+                        lat, lon = float(lat_str.strip()), float(lon_str.strip())
+                    else:
+                        continue
+                else:
+                    # Standard lat/lon keys
+                    if api['lat_key'] in data and api['lon_key'] in data:
+                        lat = float(data[api['lat_key']])
+                        lon = float(data[api['lon_key']])
+                    else:
+                        continue
+                
+                # Validate coordinates
+                if -90 <= lat <= 90 and -180 <= lon <= 180:
+                    logging.info(f"Successfully detected location: {lat:.4f}, {lon:.4f} via {api['name']}")
+                    
+                    # Log additional location info if available
+                    location_info = []
+                    for key in ['city', 'region', 'country', 'country_name']:
+                        if key in data and data[key]:
+                            location_info.append(f"{key}: {data[key]}")
+                    
+                    if location_info:
+                        logging.info(f"Location details: {', '.join(location_info)}")
+                    
+                    return lat, lon
+                else:
+                    logging.warning(f"Invalid coordinates from {api['name']}: {lat}, {lon}")
+                    
+            except requests.RequestException as e:
+                logging.warning(f"Geolocation API {api['name']} failed: {e}")
+            except (ValueError, KeyError, AttributeError) as e:
+                logging.warning(f"Error parsing geolocation data from {api['name']}: {e}")
+            except Exception as e:
+                logging.warning(f"Unexpected error with {api['name']}: {e}")
+        
+        logging.error("All geolocation services failed")
+        return None
+    
+    def validate_coordinates(self, lat: float, lon: float) -> bool:
+        """Validate latitude and longitude values"""
+        return -90 <= lat <= 90 and -180 <= lon <= 180
 
 class WeatherPredictor:
     """Handles weather data fetching and prediction using OpenMeteo API"""
@@ -312,17 +400,17 @@ class MinerController:
             return False
 
 class ThermoHashOptimized:
-    """Main ThermoHash application with ML optimization"""
+    """Main ThermoHash application with ML optimization and auto-geolocation"""
     
     def __init__(self, config_path: str = "config.json"):
         self.config = self._load_config(config_path)
         self._setup_logging()
         
+        # Get coordinates (auto-detect or use configured)
+        self.lat, self.lon = self._get_coordinates()
+        
         # Initialize components
-        self.weather_predictor = WeatherPredictor(
-            self.config["latitude"],
-            self.config["longitude"]
-        )
+        self.weather_predictor = WeatherPredictor(self.lat, self.lon)
         
         self.power_optimizer = PowerOptimizer() if TF_AVAILABLE else None
         
@@ -339,17 +427,74 @@ class ThermoHashOptimized:
         self.last_training = None
         self.last_power_target = None
         
+    def _get_coordinates(self) -> Tuple[float, float]:
+        """Get coordinates from config or auto-detect via IP geolocation"""
+        
+        # Check if coordinates are provided in config
+        config_lat = self.config.get("latitude")
+        config_lon = self.config.get("longitude")
+        
+        geolocation_service = GeolocationService()
+        
+        # If coordinates are provided and valid, use them
+        if (config_lat is not None and config_lon is not None and 
+            geolocation_service.validate_coordinates(float(config_lat), float(config_lon))):
+            lat, lon = float(config_lat), float(config_lon)
+            logging.info(f"Using configured coordinates: {lat:.4f}, {lon:.4f}")
+            return lat, lon
+        
+        # Auto-detect via IP geolocation
+        logging.info("No valid coordinates in config, attempting auto-detection...")
+        auto_location = geolocation_service.get_location_from_ip()
+        
+        if auto_location:
+            lat, lon = auto_location
+            
+            # Save detected coordinates to config for future use
+            self._save_detected_coordinates(lat, lon)
+            
+            return lat, lon
+        else:
+            # Fallback to default coordinates if all else fails
+            logging.warning("Auto-geolocation failed, using default coordinates (New York)")
+            lat, lon = 40.7128, -74.0060  # New York City as fallback
+            
+            # Save fallback coordinates to config
+            self._save_detected_coordinates(lat, lon)
+            
+            return lat, lon
+    
+    def _save_detected_coordinates(self, lat: float, lon: float):
+        """Save detected coordinates to config file for future use"""
+        try:
+            self.config["latitude"] = lat
+            self.config["longitude"] = lon
+            self.config["coordinates_auto_detected"] = True
+            self.config["coordinates_detection_time"] = datetime.now().isoformat()
+            
+            with open("config.json", "w") as config_file:
+                json.dump(self.config, config_file, indent=4)
+            
+            logging.info(f"Saved detected coordinates to config: {lat:.4f}, {lon:.4f}")
+            
+        except Exception as e:
+            logging.warning(f"Could not save coordinates to config: {e}")
+    
     def _load_config(self, config_path: str) -> Dict:
-        """Load configuration with error handling"""
+        """Load configuration with error handling and coordinate validation"""
         try:
             with open(config_path, "r") as config_file:
                 config = json.load(config_file)
                 
-            # Validate required keys
-            required_keys = ["latitude", "longitude", "miner_address", "username", "password", "temp_thresholds"]
+            # Validate required keys (latitude/longitude now optional for auto-detection)
+            required_keys = ["miner_address", "username", "password", "temp_thresholds"]
             for key in required_keys:
                 if key not in config:
                     raise ValueError(f"Missing required config key: {key}")
+            
+            # Validate temp_thresholds
+            if not isinstance(config["temp_thresholds"], dict) or not config["temp_thresholds"]:
+                raise ValueError("temp_thresholds must be a non-empty dictionary")
                     
             return config
             
@@ -459,7 +604,8 @@ class ThermoHashOptimized:
                 logging.error("Could not retrieve current weather data")
                 return
             
-            logging.info(f"Current weather: {current_weather['temperature']:.1f}°C, "
+            logging.info(f"Current weather at ({self.lat:.4f}, {self.lon:.4f}): "
+                        f"{current_weather['temperature']:.1f}°C, "
                         f"Humidity: {current_weather['humidity']:.1f}%, "
                         f"Wind: {current_weather['wind_speed']:.1f} km/h")
             
@@ -513,9 +659,10 @@ class ThermoHashOptimized:
     
     def run(self):
         """Main application loop"""
-        logging.info("ThermoHash Optimized starting up")
+        logging.info("ThermoHash Optimized with Auto-Geolocation starting up")
         logging.info(f"TensorFlow available: {TF_AVAILABLE}")
         logging.info(f"Platform: {platform.system()}")
+        logging.info(f"Using coordinates: {self.lat:.4f}, {self.lon:.4f}")
         
         # Run initial adjustment
         self.adjust_power_based_on_weather()

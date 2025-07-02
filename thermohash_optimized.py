@@ -35,6 +35,166 @@ except ImportError:
     print("Warning: TensorFlow or scikit-learn not available. ML optimization disabled.")
     TF_AVAILABLE = False
 
+class PriceTracker:
+    """Handles Bitcoin price and hash price tracking from multiple sources"""
+    
+    def __init__(self):
+        self.bitcoin_apis = [
+            {
+                'name': 'CoinGecko',
+                'url': 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd',
+                'price_path': ['bitcoin', 'usd'],
+                'timeout': 10
+            },
+            {
+                'name': 'CoinDesk',
+                'url': 'https://api.coindesk.com/v1/bpi/currentprice/USD.json',
+                'price_path': ['bpi', 'USD', 'rate_float'],
+                'timeout': 10
+            },
+            {
+                'name': 'Binance',
+                'url': 'https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT',
+                'price_path': ['price'],
+                'timeout': 10
+            }
+        ]
+        
+        self.hashprice_apis = [
+            {
+                'name': 'HashrateIndex',
+                'url': 'https://api.hashrateindex.com/graphql',
+                'timeout': 15
+            },
+            {
+                'name': 'CoinWarz',
+                'url': 'https://www.coinwarz.com/mining/bitcoin/difficulty',
+                'timeout': 15
+            }
+        ]
+        
+        self.last_bitcoin_price = None
+        self.last_hashprice = None
+        self.last_update = None
+        
+    def get_bitcoin_price(self) -> Optional[float]:
+        """Get current Bitcoin price from multiple sources"""
+        for api in self.bitcoin_apis:
+            try:
+                logging.debug(f"Fetching Bitcoin price from {api['name']}")
+                response = requests.get(api['url'], timeout=api['timeout'])
+                response.raise_for_status()
+                data = response.json()
+                
+                # Navigate through the nested JSON structure
+                price_data = data
+                for key in api['price_path']:
+                    price_data = price_data[key]
+                
+                price = float(price_data)
+                
+                if price > 0:  # Validate price
+                    self.last_bitcoin_price = price
+                    self.last_update = datetime.now()
+                    logging.info(f"Bitcoin price: ${price:,.2f} (from {api['name']})")
+                    return price
+                    
+            except requests.RequestException as e:
+                logging.warning(f"Bitcoin price API {api['name']} failed: {e}")
+            except (KeyError, ValueError, TypeError) as e:
+                logging.warning(f"Error parsing Bitcoin price from {api['name']}: {e}")
+            except Exception as e:
+                logging.warning(f"Unexpected error with {api['name']}: {e}")
+        
+        logging.error("All Bitcoin price sources failed")
+        return self.last_bitcoin_price  # Return cached price if available
+    
+    def get_network_hashrate(self) -> Optional[float]:
+        """Get current Bitcoin network hashrate"""
+        try:
+            # Using blockchain.info API for network stats
+            url = "https://api.blockchain.info/stats"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Hashrate is in hash/s, convert to TH/s
+            hashrate_th = data.get('hash_rate', 0) / 1e12
+            logging.debug(f"Network hashrate: {hashrate_th:.2f} TH/s")
+            return hashrate_th
+            
+        except Exception as e:
+            logging.warning(f"Failed to get network hashrate: {e}")
+            return None
+    
+    def get_mining_difficulty(self) -> Optional[float]:
+        """Get current Bitcoin mining difficulty"""
+        try:
+            url = "https://api.blockchain.info/stats"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            difficulty = data.get('difficulty', 0)
+            logging.debug(f"Mining difficulty: {difficulty:,.0f}")
+            return float(difficulty)
+            
+        except Exception as e:
+            logging.warning(f"Failed to get mining difficulty: {e}")
+            return None
+    
+    def calculate_hashprice(self, btc_price: Optional[float] = None) -> Optional[float]:
+        """
+        Calculate hash price (USD per TH/s per day)
+        Hash price = (BTC Price * Block Reward * 144) / (Network Hashrate * 1e12)
+        """
+        try:
+            if btc_price is None:
+                btc_price = self.get_bitcoin_price()
+            
+            if btc_price is None:
+                return None
+            
+            # Get network stats
+            hashrate = self.get_network_hashrate()
+            if hashrate is None:
+                return None
+            
+            # Bitcoin block reward (currently 6.25 BTC, will halve in ~2024)
+            block_reward = 6.25
+            blocks_per_day = 144  # ~10 minutes per block
+            
+            # Calculate daily Bitcoin production in USD
+            daily_btc_production = block_reward * blocks_per_day
+            daily_usd_production = daily_btc_production * btc_price
+            
+            # Hash price = daily USD production / network hashrate (TH/s)
+            hashprice = daily_usd_production / hashrate if hashrate > 0 else 0
+            
+            self.last_hashprice = hashprice
+            logging.info(f"Hash price: ${hashprice:.6f} per TH/s per day")
+            return hashprice
+            
+        except Exception as e:
+            logging.error(f"Error calculating hash price: {e}")
+            return self.last_hashprice  # Return cached value if available
+    
+    def get_price_data(self) -> Dict:
+        """Get comprehensive price data"""
+        btc_price = self.get_bitcoin_price()
+        hashprice = self.calculate_hashprice(btc_price)
+        difficulty = self.get_mining_difficulty()
+        hashrate = self.get_network_hashrate()
+        
+        return {
+            'bitcoin_price': btc_price,
+            'hashprice': hashprice,
+            'network_hashrate_th': hashrate,
+            'difficulty': difficulty,
+            'timestamp': datetime.now(),
+            'last_update': self.last_update
+        }
+
 class GeolocationService:
     """Handles automatic geolocation detection based on IP address"""
     
@@ -218,13 +378,13 @@ class PowerOptimizer:
         if not TF_AVAILABLE:
             return
         
-        # Simple neural network for power prediction
+        # Simple neural network for power prediction (expanded to include price features)
         self.model = tf.keras.Sequential([
-            tf.keras.layers.Dense(32, activation='relu', input_shape=(6,)),
+            tf.keras.layers.Dense(64, activation='relu', input_shape=(8,)),  # Increased for more features
             tf.keras.layers.Dropout(0.2),
-            tf.keras.layers.Dense(16, activation='relu'),
+            tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dropout(0.1),
-            tf.keras.layers.Dense(8, activation='relu'),
+            tf.keras.layers.Dense(16, activation='relu'),
             tf.keras.layers.Dense(1, activation='linear')
         ])
         
@@ -236,7 +396,7 @@ class PowerOptimizer:
         
         self.scaler = StandardScaler()
     
-    def add_training_data(self, weather_data: Dict, power_target: float):
+    def add_training_data(self, weather_data: Dict, power_target: float, price_data: Dict = None):
         """Add data point for model training"""
         features = [
             weather_data['temperature'],
@@ -244,7 +404,9 @@ class PowerOptimizer:
             weather_data['wind_speed'],
             weather_data['wind_direction'],
             weather_data['weather_code'],
-            weather_data['timestamp'].hour  # Time of day feature
+            weather_data['timestamp'].hour,  # Time of day feature
+            price_data.get('bitcoin_price', 50000) if price_data else 50000,  # Default fallback
+            price_data.get('hashprice', 0.1) if price_data else 0.1  # Default fallback
         ]
         
         self.training_data.append({
@@ -298,8 +460,8 @@ class PowerOptimizer:
             logging.error(f"Error training model: {e}")
             return False
     
-    def predict_optimal_power(self, weather_data: Dict) -> Optional[float]:
-        """Predict optimal power based on weather data"""
+    def predict_optimal_power(self, weather_data: Dict, price_data: Dict = None) -> Optional[float]:
+        """Predict optimal power based on weather and price data"""
         if not TF_AVAILABLE or self.model is None or self.scaler is None:
             return None
         
@@ -310,7 +472,9 @@ class PowerOptimizer:
                 weather_data['wind_speed'],
                 weather_data['wind_direction'],
                 weather_data['weather_code'],
-                weather_data['timestamp'].hour
+                weather_data['timestamp'].hour,
+                price_data.get('bitcoin_price', 50000) if price_data else 50000,  # Default fallback
+                price_data.get('hashprice', 0.1) if price_data else 0.1  # Default fallback
             ]])
             
             features_scaled = self.scaler.transform(features)
@@ -411,6 +575,7 @@ class ThermoHashOptimized:
         
         # Initialize components
         self.weather_predictor = WeatherPredictor(self.lat, self.lon)
+        self.price_tracker = PriceTracker()
         
         self.power_optimizer = PowerOptimizer() if TF_AVAILABLE else None
         
@@ -558,19 +723,22 @@ class ThermoHashOptimized:
             
             return int(min(self.temp_thresholds.values()))
     
-    def get_optimized_power_target(self, current_weather: Dict, forecast: List[Dict] = None) -> int:
-        """Get optimized power target using current weather and ML predictions"""
+    def get_optimized_power_target(self, current_weather: Dict, price_data: Dict = None, forecast: List[Dict] = None) -> int:
+        """Get optimized power target using current weather, price data, and ML predictions"""
         # Calculate base power from current temperature
         base_power = self.calculate_power_from_temperature(current_weather['temperature'])
         
-        if not TF_AVAILABLE or not self.power_optimizer:
-            return base_power
+        # Apply price-based adjustments
+        price_adjusted_power = self._apply_price_optimization(base_power, price_data)
         
-        # Get ML prediction
-        ml_prediction = self.power_optimizer.predict_optimal_power(current_weather)
+        if not TF_AVAILABLE or not self.power_optimizer:
+            return int(price_adjusted_power)
+        
+        # Get ML prediction with price data
+        ml_prediction = self.power_optimizer.predict_optimal_power(current_weather, price_data)
         
         if ml_prediction is None:
-            return base_power
+            return int(price_adjusted_power)
         
         # Combine predictions using configured weights
         optimization_config = self.config.get("optimization_settings", {})
@@ -579,7 +747,7 @@ class ThermoHashOptimized:
         smoothing_factor = optimization_config.get("power_smoothing_factor", 0.8)
         
         # Weighted combination
-        combined_power = (prediction_weight * ml_prediction + current_weight * base_power)
+        combined_power = (prediction_weight * ml_prediction + current_weight * price_adjusted_power)
         
         # Apply smoothing if we have a previous target
         if self.last_power_target is not None:
@@ -593,8 +761,51 @@ class ThermoHashOptimized:
         
         return int(optimized_power)
     
+    def _apply_price_optimization(self, base_power: int, price_data: Dict = None) -> float:
+        """Apply price-based power optimization"""
+        if not price_data:
+            return float(base_power)
+        
+        try:
+            price_config = self.config.get("price_settings", {})
+            hashprice = price_data.get('hashprice')
+            btc_price = price_data.get('bitcoin_price')
+            
+            if not hashprice or not btc_price:
+                return float(base_power)
+            
+            # Get price thresholds from config
+            min_hashprice = price_config.get("min_profitable_hashprice", 0.05)
+            optimal_hashprice = price_config.get("optimal_hashprice", 0.15)
+            max_power_price_factor = price_config.get("max_power_price_factor", 1.2)
+            min_power_price_factor = price_config.get("min_power_price_factor", 0.7)
+            
+            # Calculate price-based power factor
+            if hashprice <= min_hashprice:
+                # Very low profitability - reduce power significantly
+                price_factor = min_power_price_factor
+                logging.info(f"Low hash price detected (${hashprice:.6f}), reducing power by {(1-price_factor)*100:.1f}%")
+            elif hashprice >= optimal_hashprice:
+                # High profitability - increase power
+                price_factor = max_power_price_factor
+                logging.info(f"High hash price detected (${hashprice:.6f}), increasing power by {(price_factor-1)*100:.1f}%")
+            else:
+                # Interpolate between min and optimal
+                progress = (hashprice - min_hashprice) / (optimal_hashprice - min_hashprice)
+                price_factor = min_power_price_factor + progress * (max_power_price_factor - min_power_price_factor)
+                logging.debug(f"Hash price ${hashprice:.6f}, applying {(price_factor-1)*100:.1f}% power adjustment")
+            
+            # Apply price factor to base power
+            price_adjusted_power = base_power * price_factor
+            
+            return price_adjusted_power
+            
+        except Exception as e:
+            logging.error(f"Error applying price optimization: {e}")
+            return float(base_power)
+    
     def adjust_power_based_on_weather(self):
-        """Main power adjustment function with ML optimization"""
+        """Main power adjustment function with ML optimization and price data"""
         try:
             logging.info("Starting power adjustment cycle")
             
@@ -609,21 +820,30 @@ class ThermoHashOptimized:
                         f"Humidity: {current_weather['humidity']:.1f}%, "
                         f"Wind: {current_weather['wind_speed']:.1f} km/h")
             
+            # Get current price data
+            price_data = self.price_tracker.get_price_data()
+            if price_data['bitcoin_price']:
+                logging.info(f"Bitcoin price: ${price_data['bitcoin_price']:,.2f}")
+            if price_data['hashprice']:
+                logging.info(f"Hash price: ${price_data['hashprice']:.6f} per TH/s per day")
+            if price_data['difficulty']:
+                logging.info(f"Network difficulty: {price_data['difficulty']:,.0f}")
+            
             # Get forecast for optimization
             prediction_config = self.config.get("prediction_settings", {})
             forecast_hours = prediction_config.get("forecast_hours", 24)
             forecast = self.weather_predictor.get_weather_forecast(forecast_hours)
             
-            # Calculate optimized power target
-            power_target = self.get_optimized_power_target(current_weather, forecast)
+            # Calculate optimized power target with price data
+            power_target = self.get_optimized_power_target(current_weather, price_data, forecast)
             
             logging.info(f"Calculated power target: {power_target} watts")
             
             # Set power target on miner
             if self.miner_controller.set_power_target(power_target):
-                # Add training data for ML model
+                # Add training data for ML model with price data
                 if TF_AVAILABLE and self.power_optimizer:
-                    self.power_optimizer.add_training_data(current_weather, power_target)
+                    self.power_optimizer.add_training_data(current_weather, power_target, price_data)
                 
                 self.last_power_target = power_target
                 logging.info(f"Successfully set power target to {power_target} watts")

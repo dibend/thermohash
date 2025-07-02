@@ -25,6 +25,17 @@
         "current_weather_weight": 0.3,
         "power_smoothing_factor": 0.8
     },
+    "price_settings": {
+        "enable_price_optimization": true,
+        "min_profitable_hashprice": 0.05,
+        "optimal_hashprice": 0.15,
+        "max_power_price_factor": 1.2,
+        "min_power_price_factor": 0.7,
+        "price_check_interval_minutes": 30,
+        "bitcoin_price_sources": ["coingecko", "coindesk", "binance"],
+        "enable_profitability_shutdown": false,
+        "shutdown_hashprice_threshold": 0.02
+    },
     "logging": {
         "level": "INFO",
         "file_path": "/var/log/thermohash.log"
@@ -37,6 +48,12 @@
         "prediction_model_enabled": "Enable ML optimization (requires TensorFlow)",
         "prediction_weight": "Weight given to ML predictions (0.0-1.0)",
         "current_weather_weight": "Weight given to current weather (0.0-1.0)",
-        "power_smoothing_factor": "Smoothing factor for power changes (0.0-1.0, higher = smoother)"
+        "power_smoothing_factor": "Smoothing factor for power changes (0.0-1.0, higher = smoother)",
+        "min_profitable_hashprice": "Minimum hash price (USD per TH/s per day) for profitable mining",
+        "optimal_hashprice": "Hash price threshold for maximum power operation",
+        "max_power_price_factor": "Maximum power increase factor when hash price is high (1.0 = no increase)",
+        "min_power_price_factor": "Power reduction factor when hash price is low (1.0 = no reduction)",
+        "enable_profitability_shutdown": "Automatically shut down miner when hash price falls below threshold",
+        "shutdown_hashprice_threshold": "Hash price threshold for automatic shutdown (USD per TH/s per day)"
     }
 }

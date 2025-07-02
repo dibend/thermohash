@@ -1,0 +1,32 @@
+{
+    "latitude": 40.6982,
+    "longitude": -74.4014,
+    "miner_address": "192.168.1.100",
+    "username": "root",
+    "password": "your_password",
+    "temp_thresholds": {
+        "10.0": 1000,
+        "15.0": 900,
+        "20.0": 800,
+        "25.0": 700,
+        "30.0": 600,
+        "35.0": 500,
+        "40.0": 400
+    },
+    "prediction_settings": {
+        "forecast_hours": 24,
+        "prediction_model_enabled": true,
+        "retrain_interval_hours": 168,
+        "min_training_samples": 100
+    },
+    "optimization_settings": {
+        "check_interval_minutes": 10,
+        "prediction_weight": 0.7,
+        "current_weather_weight": 0.3,
+        "power_smoothing_factor": 0.8
+    },
+    "logging": {
+        "level": "INFO",
+        "file_path": "/var/log/thermohash.log"
+    }
+}

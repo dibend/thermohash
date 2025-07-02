@@ -1,0 +1,551 @@
+#!/usr/bin/env python3
+"""
+ThermoHash Optimized - Smart Bitcoin Miner Power Management
+Uses OpenMeteo API weather predictions and TensorFlow CPU for optimal power management
+Cross-platform compatible (Linux/Windows)
+"""
+
+import schedule
+import time
+import os
+import json
+import requests
+import logging
+import platform
+import sys
+from datetime import datetime, timedelta
+from subprocess import Popen, PIPE, DEVNULL
+import numpy as np
+import pandas as pd
+from typing import Dict, List, Tuple, Optional
+import warnings
+
+# Suppress TensorFlow warnings for cleaner output
+warnings.filterwarnings('ignore', category=FutureWarning)
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+
+try:
+    import tensorflow as tf
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.model_selection import train_test_split
+    import joblib
+    TF_AVAILABLE = True
+except ImportError:
+    print("Warning: TensorFlow or scikit-learn not available. ML optimization disabled.")
+    TF_AVAILABLE = False
+
+class WeatherPredictor:
+    """Handles weather data fetching and prediction using OpenMeteo API"""
+    
+    def __init__(self, lat: float, lon: float):
+        self.lat = lat
+        self.lon = lon
+        self.base_url = "https://api.open-meteo.com/v1/forecast"
+        
+    def get_current_weather(self) -> Optional[Dict]:
+        """Get current weather data with error handling"""
+        try:
+            url = f"{self.base_url}?latitude={self.lat}&longitude={self.lon}&current_weather=true&timezone=auto"
+            response = requests.get(url, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            current = data["current_weather"]
+            return {
+                'temperature': float(current["temperature"]),
+                'humidity': current.get("humidity", 50),  # Default fallback
+                'wind_speed': float(current["windspeed"]),
+                'wind_direction': float(current["winddirection"]),
+                'weather_code': int(current["weathercode"]),
+                'timestamp': datetime.now()
+            }
+        except requests.RequestException as e:
+            logging.error(f"Error fetching current weather: {e}")
+            return None
+        except (KeyError, ValueError) as e:
+            logging.error(f"Error parsing weather data: {e}")
+            return None
+    
+    def get_weather_forecast(self, hours: int = 24) -> Optional[List[Dict]]:
+        """Get weather forecast for specified hours"""
+        try:
+            url = (f"{self.base_url}?latitude={self.lat}&longitude={self.lon}"
+                   f"&hourly=temperature_2m,relative_humidity_2m,wind_speed_10m,"
+                   f"wind_direction_10m,weather_code&timezone=auto&forecast_days=3")
+            
+            response = requests.get(url, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            
+            hourly = data["hourly"]
+            forecast = []
+            
+            for i in range(min(hours, len(hourly["time"]))):
+                forecast.append({
+                    'temperature': float(hourly["temperature_2m"][i]),
+                    'humidity': float(hourly["relative_humidity_2m"][i]),
+                    'wind_speed': float(hourly["wind_speed_10m"][i]),
+                    'wind_direction': float(hourly["wind_direction_10m"][i]),
+                    'weather_code': int(hourly["weather_code"][i]),
+                    'timestamp': datetime.fromisoformat(hourly["time"][i].replace('Z', '+00:00'))
+                })
+            
+            return forecast
+        except requests.RequestException as e:
+            logging.error(f"Error fetching weather forecast: {e}")
+            return None
+        except (KeyError, ValueError) as e:
+            logging.error(f"Error parsing forecast data: {e}")
+            return None
+
+class PowerOptimizer:
+    """TensorFlow-based power optimization using weather predictions"""
+    
+    def __init__(self, model_path: str = "thermohash_model.pkl"):
+        self.model_path = model_path
+        self.scaler_path = "thermohash_scaler.pkl"
+        self.model = None
+        self.scaler = None
+        self.training_data = []
+        
+        if TF_AVAILABLE:
+            self._load_or_create_model()
+    
+    def _load_or_create_model(self):
+        """Load existing model or create new one"""
+        try:
+            if os.path.exists(self.model_path) and os.path.exists(self.scaler_path):
+                self.model = tf.keras.models.load_model(self.model_path)
+                self.scaler = joblib.load(self.scaler_path)
+                logging.info("Loaded existing model and scaler")
+            else:
+                self._create_model()
+                logging.info("Created new model")
+        except Exception as e:
+            logging.error(f"Error with model: {e}")
+            self._create_model()
+    
+    def _create_model(self):
+        """Create a new neural network model"""
+        if not TF_AVAILABLE:
+            return
+        
+        # Simple neural network for power prediction
+        self.model = tf.keras.Sequential([
+            tf.keras.layers.Dense(32, activation='relu', input_shape=(6,)),
+            tf.keras.layers.Dropout(0.2),
+            tf.keras.layers.Dense(16, activation='relu'),
+            tf.keras.layers.Dropout(0.1),
+            tf.keras.layers.Dense(8, activation='relu'),
+            tf.keras.layers.Dense(1, activation='linear')
+        ])
+        
+        self.model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+            loss='mse',
+            metrics=['mae']
+        )
+        
+        self.scaler = StandardScaler()
+    
+    def add_training_data(self, weather_data: Dict, power_target: float):
+        """Add data point for model training"""
+        features = [
+            weather_data['temperature'],
+            weather_data['humidity'],
+            weather_data['wind_speed'],
+            weather_data['wind_direction'],
+            weather_data['weather_code'],
+            weather_data['timestamp'].hour  # Time of day feature
+        ]
+        
+        self.training_data.append({
+            'features': features,
+            'target': power_target,
+            'timestamp': weather_data['timestamp']
+        })
+        
+        # Keep only recent data (last 30 days)
+        cutoff = datetime.now() - timedelta(days=30)
+        self.training_data = [
+            d for d in self.training_data 
+            if d['timestamp'] > cutoff
+        ]
+    
+    def train_model(self, min_samples: int = 100) -> bool:
+        """Train the model if enough data is available"""
+        if not TF_AVAILABLE or len(self.training_data) < min_samples:
+            return False
+        
+        try:
+            # Prepare training data
+            X = np.array([d['features'] for d in self.training_data])
+            y = np.array([d['target'] for d in self.training_data])
+            
+            # Scale features
+            X_scaled = self.scaler.fit_transform(X)
+            
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_scaled, y, test_size=0.2, random_state=42
+            )
+            
+            # Train model
+            self.model.fit(
+                X_train, y_train,
+                epochs=50,
+                batch_size=32,
+                validation_data=(X_test, y_test),
+                verbose=0
+            )
+            
+            # Save model and scaler
+            self.model.save(self.model_path)
+            joblib.dump(self.scaler, self.scaler_path)
+            
+            logging.info(f"Model trained successfully with {len(self.training_data)} samples")
+            return True
+            
+        except Exception as e:
+            logging.error(f"Error training model: {e}")
+            return False
+    
+    def predict_optimal_power(self, weather_data: Dict) -> Optional[float]:
+        """Predict optimal power based on weather data"""
+        if not TF_AVAILABLE or self.model is None or self.scaler is None:
+            return None
+        
+        try:
+            features = np.array([[
+                weather_data['temperature'],
+                weather_data['humidity'],
+                weather_data['wind_speed'],
+                weather_data['wind_direction'],
+                weather_data['weather_code'],
+                weather_data['timestamp'].hour
+            ]])
+            
+            features_scaled = self.scaler.transform(features)
+            prediction = self.model.predict(features_scaled, verbose=0)[0][0]
+            
+            return float(prediction)
+            
+        except Exception as e:
+            logging.error(f"Error making prediction: {e}")
+            return None
+
+class MinerController:
+    """Handles miner communication and power management"""
+    
+    def __init__(self, miner_address: str, username: str, password: str):
+        self.miner_address = miner_address
+        self.username = username
+        self.password = password
+        self.current_token = None
+        self.token_expiry = None
+        
+    def authenticate(self) -> Optional[str]:
+        """Authenticate and get session token with platform-specific handling"""
+        if self.current_token and self.token_expiry and datetime.now() < self.token_expiry:
+            return self.current_token
+        
+        try:
+            auth_data = json.dumps({"username": self.username, "password": self.password})
+            auth_command = [
+                'grpcurl', '-plaintext', '-d', auth_data,
+                f'{self.miner_address}:50051',
+                'braiins.bos.v1.AuthenticationService/Login'
+            ]
+            
+            process = Popen(auth_command, stdout=PIPE, stderr=PIPE, text=True)
+            output, error = process.communicate(timeout=30)
+            
+            if process.returncode == 0:
+                for line in output.split('\n'):
+                    if "authorization" in line:
+                        token = line.split(": ")[1].strip().strip('"')
+                        self.current_token = token
+                        self.token_expiry = datetime.now() + timedelta(hours=1)
+                        logging.debug("Authentication successful")
+                        return token
+            else:
+                logging.error(f"Authentication failed: {error}")
+                
+        except Exception as e:
+            logging.error(f"Authentication error: {e}")
+        
+        return None
+    
+    def set_power_target(self, power_target: int) -> bool:
+        """Set miner power target with enhanced error handling"""
+        token = self.authenticate()
+        if not token:
+            logging.error("Cannot set power target: authentication failed")
+            return False
+        
+        try:
+            power_data = json.dumps({
+                "power_target": {"watt": power_target},
+                "save_action": 2
+            })
+            
+            set_command = [
+                'grpcurl', '-plaintext',
+                '-H', f'authorization:{token}',
+                '-d', power_data,
+                f'{self.miner_address}:50051',
+                'braiins.bos.v1.PerformanceService/SetPowerTarget'
+            ]
+            
+            process = Popen(set_command, stdout=PIPE, stderr=PIPE, text=True)
+            output, error = process.communicate(timeout=30)
+            
+            if process.returncode == 0:
+                logging.info(f"Power target successfully set to {power_target} watts")
+                return True
+            else:
+                logging.error(f"Failed to set power target: {error}")
+                return False
+                
+        except Exception as e:
+            logging.error(f"Error setting power target: {e}")
+            return False
+
+class ThermoHashOptimized:
+    """Main ThermoHash application with ML optimization"""
+    
+    def __init__(self, config_path: str = "config.json"):
+        self.config = self._load_config(config_path)
+        self._setup_logging()
+        
+        # Initialize components
+        self.weather_predictor = WeatherPredictor(
+            self.config["latitude"],
+            self.config["longitude"]
+        )
+        
+        self.power_optimizer = PowerOptimizer() if TF_AVAILABLE else None
+        
+        self.miner_controller = MinerController(
+            self.config["miner_address"],
+            os.getenv("MINER_USERNAME", self.config["username"]),
+            os.getenv("MINER_PASSWORD", self.config["password"])
+        )
+        
+        self.temp_thresholds = {
+            float(k): float(v) for k, v in self.config["temp_thresholds"].items()
+        }
+        
+        self.last_training = None
+        self.last_power_target = None
+        
+    def _load_config(self, config_path: str) -> Dict:
+        """Load configuration with error handling"""
+        try:
+            with open(config_path, "r") as config_file:
+                config = json.load(config_file)
+                
+            # Validate required keys
+            required_keys = ["latitude", "longitude", "miner_address", "username", "password", "temp_thresholds"]
+            for key in required_keys:
+                if key not in config:
+                    raise ValueError(f"Missing required config key: {key}")
+                    
+            return config
+            
+        except FileNotFoundError:
+            logging.error(f"Config file {config_path} not found")
+            sys.exit(1)
+        except json.JSONDecodeError as e:
+            logging.error(f"Invalid JSON in config file: {e}")
+            sys.exit(1)
+        except ValueError as e:
+            logging.error(f"Config validation error: {e}")
+            sys.exit(1)
+    
+    def _setup_logging(self):
+        """Setup logging with cross-platform compatibility"""
+        log_config = self.config.get("logging", {})
+        log_level = getattr(logging, log_config.get("level", "INFO"))
+        
+        # Use appropriate log path for platform
+        if platform.system() == "Windows":
+            log_path = log_config.get("file_path", "thermohash.log")
+        else:
+            log_path = log_config.get("file_path", "/var/log/thermohash.log")
+            
+        # Ensure log directory exists
+        log_dir = os.path.dirname(log_path)
+        if log_dir and not os.path.exists(log_dir):
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except PermissionError:
+                log_path = "thermohash.log"  # Fallback to current directory
+        
+        logging.basicConfig(
+            level=log_level,
+            format='%(asctime)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_path),
+                logging.StreamHandler(sys.stdout)
+            ]
+        )
+    
+    def calculate_power_from_temperature(self, temperature: float) -> int:
+        """Calculate power target based on temperature thresholds"""
+        if temperature <= min(self.temp_thresholds.keys()):
+            return int(max(self.temp_thresholds.values()))
+        elif temperature >= max(self.temp_thresholds.keys()):
+            return int(min(self.temp_thresholds.values()))
+        else:
+            # Linear interpolation between thresholds
+            sorted_thresholds = sorted(self.temp_thresholds.items())
+            for i, (temp_threshold, power) in enumerate(sorted_thresholds):
+                if temperature <= temp_threshold:
+                    if i == 0:
+                        return int(power)
+                    else:
+                        # Interpolate between previous and current threshold
+                        prev_temp, prev_power = sorted_thresholds[i-1]
+                        ratio = (temperature - prev_temp) / (temp_threshold - prev_temp)
+                        interpolated_power = prev_power + ratio * (power - prev_power)
+                        return int(interpolated_power)
+            
+            return int(min(self.temp_thresholds.values()))
+    
+    def get_optimized_power_target(self, current_weather: Dict, forecast: List[Dict] = None) -> int:
+        """Get optimized power target using current weather and ML predictions"""
+        # Calculate base power from current temperature
+        base_power = self.calculate_power_from_temperature(current_weather['temperature'])
+        
+        if not TF_AVAILABLE or not self.power_optimizer:
+            return base_power
+        
+        # Get ML prediction
+        ml_prediction = self.power_optimizer.predict_optimal_power(current_weather)
+        
+        if ml_prediction is None:
+            return base_power
+        
+        # Combine predictions using configured weights
+        optimization_config = self.config.get("optimization_settings", {})
+        prediction_weight = optimization_config.get("prediction_weight", 0.7)
+        current_weight = optimization_config.get("current_weather_weight", 0.3)
+        smoothing_factor = optimization_config.get("power_smoothing_factor", 0.8)
+        
+        # Weighted combination
+        combined_power = (prediction_weight * ml_prediction + current_weight * base_power)
+        
+        # Apply smoothing if we have a previous target
+        if self.last_power_target is not None:
+            combined_power = (smoothing_factor * self.last_power_target + 
+                            (1 - smoothing_factor) * combined_power)
+        
+        # Ensure within valid range
+        min_power = min(self.temp_thresholds.values())
+        max_power = max(self.temp_thresholds.values())
+        optimized_power = max(min_power, min(max_power, combined_power))
+        
+        return int(optimized_power)
+    
+    def adjust_power_based_on_weather(self):
+        """Main power adjustment function with ML optimization"""
+        try:
+            logging.info("Starting power adjustment cycle")
+            
+            # Get current weather
+            current_weather = self.weather_predictor.get_current_weather()
+            if not current_weather:
+                logging.error("Could not retrieve current weather data")
+                return
+            
+            logging.info(f"Current weather: {current_weather['temperature']:.1f}°C, "
+                        f"Humidity: {current_weather['humidity']:.1f}%, "
+                        f"Wind: {current_weather['wind_speed']:.1f} km/h")
+            
+            # Get forecast for optimization
+            prediction_config = self.config.get("prediction_settings", {})
+            forecast_hours = prediction_config.get("forecast_hours", 24)
+            forecast = self.weather_predictor.get_weather_forecast(forecast_hours)
+            
+            # Calculate optimized power target
+            power_target = self.get_optimized_power_target(current_weather, forecast)
+            
+            logging.info(f"Calculated power target: {power_target} watts")
+            
+            # Set power target on miner
+            if self.miner_controller.set_power_target(power_target):
+                # Add training data for ML model
+                if TF_AVAILABLE and self.power_optimizer:
+                    self.power_optimizer.add_training_data(current_weather, power_target)
+                
+                self.last_power_target = power_target
+                logging.info(f"Successfully set power target to {power_target} watts")
+            else:
+                logging.error("Failed to set power target on miner")
+            
+            # Periodic model training
+            self._check_and_train_model()
+            
+        except Exception as e:
+            logging.error(f"Error in power adjustment cycle: {e}")
+    
+    def _check_and_train_model(self):
+        """Check if model needs retraining and do it if necessary"""
+        if not TF_AVAILABLE or not self.power_optimizer:
+            return
+        
+        prediction_config = self.config.get("prediction_settings", {})
+        retrain_interval = prediction_config.get("retrain_interval_hours", 168)  # 1 week
+        min_samples = prediction_config.get("min_training_samples", 100)
+        
+        now = datetime.now()
+        if (self.last_training is None or 
+            (now - self.last_training).total_seconds() > retrain_interval * 3600):
+            
+            if len(self.power_optimizer.training_data) >= min_samples:
+                logging.info("Starting model retraining")
+                if self.power_optimizer.train_model(min_samples):
+                    self.last_training = now
+                    logging.info("Model retraining completed successfully")
+                else:
+                    logging.warning("Model retraining failed")
+    
+    def run(self):
+        """Main application loop"""
+        logging.info("ThermoHash Optimized starting up")
+        logging.info(f"TensorFlow available: {TF_AVAILABLE}")
+        logging.info(f"Platform: {platform.system()}")
+        
+        # Run initial adjustment
+        self.adjust_power_based_on_weather()
+        
+        # Schedule periodic adjustments
+        optimization_config = self.config.get("optimization_settings", {})
+        interval_minutes = optimization_config.get("check_interval_minutes", 10)
+        
+        schedule.every(interval_minutes).minutes.do(self.adjust_power_based_on_weather)
+        
+        logging.info(f"Scheduler running, will adjust power every {interval_minutes} minutes")
+        
+        try:
+            while True:
+                schedule.run_pending()
+                time.sleep(1)
+        except KeyboardInterrupt:
+            logging.info("ThermoHash stopped by user")
+        except Exception as e:
+            logging.error(f"Unexpected error in main loop: {e}")
+            raise
+
+def main():
+    """Entry point"""
+    try:
+        app = ThermoHashOptimized()
+        app.run()
+    except Exception as e:
+        logging.error(f"Fatal error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

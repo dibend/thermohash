@@ -4,6 +4,12 @@
 
 ## ✨ New Features & Improvements
 
+### 🌍 **NEW: Automatic IP-Based Geolocation**
+- **Zero-configuration setup** - automatically detects your location from IP address
+- **Multiple geolocation APIs** - ipapi.co, ipinfo.io, ip-api.com for reliability
+- **Manual override** - still supports manual latitude/longitude configuration
+- **Location caching** - saves detected coordinates to config for faster startup
+
 ### 🤖 Machine Learning Optimization
 - **TensorFlow CPU integration** for lightweight ML predictions
 - **Neural network model** that learns optimal power settings from historical data
@@ -35,6 +41,7 @@
 - **grpcurl** (automatically installed on Linux)
 - **Braiins OS** on your miner with port 50051 accessible
 - **4GB+ RAM** recommended for ML features (optional)
+- **Internet connection** for weather data and auto-geolocation
 
 ## 🚀 Quick Installation
 
@@ -67,12 +74,12 @@ python thermohash_optimized.py
 
 ## ⚙️ Configuration
 
-The system uses an enhanced `config.json` file with additional optimization parameters:
+The system uses an enhanced `config.json` file with **automatic geolocation**:
 
 ```json
 {
-    "latitude": 40.6982,
-    "longitude": -74.4014,
+    "latitude": null,
+    "longitude": null,
     "miner_address": "192.168.1.100",
     "username": "root",
     "password": "your_password",
@@ -104,10 +111,22 @@ The system uses an enhanced `config.json` file with additional optimization para
 }
 ```
 
+### 🌍 Geolocation Configuration
+
+**Automatic Mode (Recommended):**
+- Set `latitude` and `longitude` to `null` (default)
+- System automatically detects your location based on IP address
+- Detected coordinates are saved to config for future use
+
+**Manual Mode:**
+- Set `latitude` and `longitude` to your specific coordinates
+- Example: `"latitude": 40.6982, "longitude": -74.4014`
+- Useful for: VPN users, specific location targeting, or privacy concerns
+
 ### Configuration Parameters
 
 #### Basic Settings
-- `latitude/longitude`: Your location for weather data
+- `latitude/longitude`: Leave `null` for auto-detection, or set specific coordinates
 - `miner_address`: IP or hostname of your Braiins OS miner
 - `username/password`: Miner authentication credentials
 - `temp_thresholds`: Temperature to power mapping (°C: watts)
@@ -122,9 +141,15 @@ The system uses an enhanced `config.json` file with additional optimization para
 - `check_interval_minutes`: How often to check and adjust power
 - `prediction_weight`: Weight given to ML predictions (0.0-1.0)
 - `current_weather_weight`: Weight given to current weather (0.0-1.0)
-- `power_smoothing_factor`: Smoothing applied to power changes (0.0-1.0)
+- `power_smoothing_factor`: Smoothing factor for power changes (0.0-1.0)
 
 ## 🎯 How It Works
+
+### Location Detection Process
+1. **Check Config**: If valid coordinates exist in config, use them
+2. **Auto-Detect**: Try multiple geolocation APIs (ipapi.co, ipinfo.io, ip-api.com)
+3. **Save Results**: Cache detected coordinates to config file
+4. **Fallback**: Use New York coordinates if all detection fails
 
 ### Traditional Mode (Fallback)
 1. Fetches current temperature from OpenMeteo API
@@ -150,6 +175,18 @@ The system uses an enhanced `config.json` file with additional optimization para
 - **Persistence**: Models saved to disk for continuity
 
 ## 🔄 Usage
+
+### First-Time Setup
+```bash
+# 1. Install ThermoHash
+./install.sh  # or install.bat on Windows
+
+# 2. Configure your miner (coordinates auto-detected)
+nano config.json  # Only need to set miner_address, username, password
+
+# 3. Run and watch auto-geolocation
+python thermohash_optimized.py
+```
 
 ### Running the Application
 ```bash
@@ -189,16 +226,42 @@ type thermohash.log
 ### Resource Usage
 - **CPU**: Minimal impact (~1-2% during adjustments)
 - **Memory**: ~100MB base + ~200MB with ML features
-- **Network**: <1KB per weather check (every 10 minutes)
+- **Network**: <2KB per weather/location check (every 10 minutes)
 - **Disk**: ~50MB for TensorFlow CPU, models <10MB
 
 ### Optimization Benefits
-- **Improved efficiency**: ML learns optimal settings over time
+- **Zero-config setup**: No need to lookup coordinates manually
+- **Improved accuracy**: Location-specific weather data
+- **Automatic adaptation**: ML learns optimal settings over time
 - **Smoother operation**: Reduced power fluctuations
 - **Predictive adjustments**: Anticipates weather changes
 - **Self-improving**: Performance improves with more data
 
 ## 🛠️ Troubleshooting
+
+### Geolocation Issues
+
+**Auto-detection failed:**
+```bash
+# Check logs for specific error
+tail -f /var/log/thermohash.log
+
+# Manual override - set coordinates in config:
+{
+    "latitude": 40.6982,
+    "longitude": -74.4014
+}
+```
+
+**Wrong location detected:**
+- VPN users: Set manual coordinates or disable VPN temporarily
+- Corporate networks: May show company location instead of physical location
+- Use manual coordinates for precision applications
+
+**Geolocation APIs blocked:**
+- Check firewall/proxy settings
+- Try different network connection
+- Set manual coordinates as fallback
 
 ### Common Issues
 
@@ -235,8 +298,20 @@ Enable detailed logging by setting log level to "DEBUG" in config:
 }
 ```
 
-## 🔒 Security Considerations
+## 🔒 Security & Privacy Considerations
 
+### Geolocation Privacy
+- **IP-based detection**: Only approximate location (city/region level)
+- **No GPS data**: System doesn't access device location services
+- **Manual override**: Can always set specific coordinates
+- **Data storage**: Coordinates saved locally in config file only
+
+### Network Security
+- **HTTPS APIs**: All geolocation APIs use secure connections
+- **No tracking**: Location requests are anonymous
+- **Local processing**: Weather data processed locally
+
+### Miner Security
 - **Credentials**: Use environment variables for sensitive data:
   ```bash
   export MINER_USERNAME="your_username"
@@ -248,7 +323,7 @@ Enable detailed logging by setting log level to "DEBUG" in config:
 ## 🤝 Contributing
 
 We welcome contributions! Areas for improvement:
-- Additional weather data sources
+- Additional geolocation services
 - More sophisticated ML models
 - Multi-miner support
 - Web dashboard interface
@@ -262,6 +337,7 @@ This project is licensed under the same terms as the original ThermoHash project
 
 - Original ThermoHash project contributors
 - OpenMeteo API for free weather data
+- Geolocation API providers (ipapi.co, ipinfo.io, ip-api.com)
 - TensorFlow team for excellent ML frameworks
 - Braiins team for comprehensive gRPC API
 
@@ -274,4 +350,4 @@ For issues and questions:
 
 ---
 
-**ThermoHash Optimized** - Smart mining with the power of machine learning! 🚀⚡
+**ThermoHash Optimized** - Smart mining with auto-geolocation and machine learning! 🌍🚀⚡

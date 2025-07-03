@@ -95,4 +95,24 @@ Special perks – swag, priority feature votes, and private Q&A – await our ge
 
 ---
 
+## 📸 FogHashing Heat-Recovery Gallery
+
+![FogHashing Heat-Recovery 1](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_1.jpg)
+
+![FogHashing Heat-Recovery 2](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_2.jpg)
+
+![FogHashing Heat-Recovery 3](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_3.jpg)
+
+![FogHashing Heat-Recovery 4](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_4.jpg)
+
+![FogHashing Heat-Recovery 5](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_5.jpg)
+
+![FogHashing Heat-Recovery 6](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_6.jpg)
+
+![FogHashing Heat-Recovery 7](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_7.jpg)
+
+![FogHashing Heat-Recovery 8](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_8.jpg)
+
+---
+
 > **ThermoHash** – because *your* hash-rate should power *your* world.

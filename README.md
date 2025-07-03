@@ -3,7 +3,7 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/dibend?style=social)](https://github.com/sponsors/dibend)
 [![License](https://img.shields.io/github/license/dibend/thermohash)](LICENSE)
 
-From a single S9 keeping your living-room cozy to an institutional-scale blockchain datacenter running **thousands** of ASICs – **ThermoHash** turns excess mining heat into intelligent, profitable energy while slashing setup time to *minutes*.
+From a single S19 keeping your living-room cozy to an institutional-scale blockchain datacenter running **thousands** of ASICs – **ThermoHash** turns excess mining heat into intelligent, profitable energy while slashing setup time to *minutes*.
 
 ---
 
@@ -25,7 +25,7 @@ From a single S9 keeping your living-room cozy to an institutional-scale blockch
 
 ## 🏡 For the Home Hobbyist
 
-* **Whisper-Quiet Efficiency** – run a down-clocked S9 on 120 V without tripping breakers.
+* **Whisper-Quiet Efficiency** – run a down-clocked S19 on 120 V without tripping breakers.
 * **Automatic Comfort Mode** – maintain a target room temperature; excess hash shuts off politely.
 * **Heat-Reuse Guides** – detailed immersion and radiator tutorials included.
 

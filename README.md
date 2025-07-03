@@ -93,8 +93,7 @@ Special perks – swag, priority feature votes, and private Q&A – await our ge
 ### 👥 Join the Community
 
 * GitHub Issues for bugs & feature requests
-* Pull Requests welcome – see `CONTRIBUTING.md` (coming soon)
-* Follow updates on X/Twitter [@ThermoHash](https://twitter.com/ThermoHash)
+* Pull Requests welcome
 
 ---
 

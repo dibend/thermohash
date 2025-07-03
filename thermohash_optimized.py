@@ -429,13 +429,16 @@ class PowerOptimizer:
             self._create_model()
     
     def _create_model(self):
-        """Create a new neural network model"""
+        """Create a new neural network model with financial features"""
         if not TF_AVAILABLE:
             return
         
-        # Simple neural network for power prediction
+        # Enhanced neural network for power prediction with financial features
+        # Input features: weather (6) + financial (3) = 9 features
         self.model = tf.keras.Sequential([
-            tf.keras.layers.Dense(32, activation='relu', input_shape=(6,)),
+            tf.keras.layers.Dense(64, activation='relu', input_shape=(9,)),
+            tf.keras.layers.Dropout(0.3),
+            tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dropout(0.2),
             tf.keras.layers.Dense(16, activation='relu'),
             tf.keras.layers.Dropout(0.1),
@@ -452,14 +455,17 @@ class PowerOptimizer:
         self.scaler = StandardScaler()
     
     def add_training_data(self, weather_data: Dict, power_target: float):
-        """Add data point for model training"""
+        """Add data point for model training with enhanced features"""
         features = [
             weather_data['temperature'],
             weather_data['humidity'],
             weather_data['wind_speed'],
             weather_data['wind_direction'],
             weather_data['weather_code'],
-            weather_data['timestamp'].hour  # Time of day feature
+            weather_data['timestamp'].hour,  # Time of day feature
+            weather_data.get('bitcoin_price', 50000.0),  # Default fallback
+            weather_data.get('hashprice_usd', 50.0),     # Default fallback
+            weather_data.get('network_hashrate', 600.0)   # Default fallback (EH/s)
         ]
         
         self.training_data.append({
@@ -514,7 +520,7 @@ class PowerOptimizer:
             return False
     
     def predict_optimal_power(self, weather_data: Dict) -> Optional[float]:
-        """Predict optimal power based on weather data"""
+        """Predict optimal power based on weather and financial data"""
         if not TF_AVAILABLE or self.model is None or self.scaler is None:
             return None
         
@@ -525,7 +531,10 @@ class PowerOptimizer:
                 weather_data['wind_speed'],
                 weather_data['wind_direction'],
                 weather_data['weather_code'],
-                weather_data['timestamp'].hour
+                weather_data['timestamp'].hour,
+                weather_data.get('bitcoin_price', 50000.0),  # Default fallback
+                weather_data.get('hashprice_usd', 50.0),     # Default fallback
+                weather_data.get('network_hashrate', 600.0)   # Default fallback (EH/s)
             ]])
             
             features_scaled = self.scaler.transform(features)

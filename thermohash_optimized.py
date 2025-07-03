@@ -1,4 +1,4 @@
-THIS SHOULD BE A LINTER ERROR#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 ThermoHash Optimized - Smart Bitcoin Miner Power Management
 Uses OpenMeteo API weather predictions and TensorFlow CPU for optimal power management
@@ -899,7 +899,7 @@ class ThermoHashOptimized:
             return base_power
     
     def adjust_power_based_on_weather(self):
-        """Main power adjustment function with ML optimization"""
+        """Main power adjustment function with ML optimization and financial data"""
         try:
             logging.info("Starting power adjustment cycle")
             
@@ -914,6 +914,18 @@ class ThermoHashOptimized:
                         f"Humidity: {current_weather['humidity']:.1f}%, "
                         f"Wind: {current_weather['wind_speed']:.1f} km/h")
             
+            # Get financial data
+            bitcoin_price = self.financial_service.get_bitcoin_price()
+            hashprice_data = self.financial_service.get_hashprice_index()
+            
+            if bitcoin_price:
+                logging.info(f"Current Bitcoin price: ${bitcoin_price:,.2f}")
+            
+            if hashprice_data:
+                logging.info(f"Current hashprice: ${hashprice_data['usd_per_th_day']:.2f}/TH/day "
+                           f"({hashprice_data['btc_per_th_day']:.8f} BTC/TH/day)")
+                logging.info(f"Network hashrate: {hashprice_data['network_hashrate_eh']:.1f} EH/s")
+            
             # Get forecast for optimization
             prediction_config = self.config.get("prediction_settings", {})
             forecast_hours = prediction_config.get("forecast_hours", 24)
@@ -922,13 +934,38 @@ class ThermoHashOptimized:
             # Calculate optimized power target
             power_target = self.get_optimized_power_target(current_weather, forecast)
             
+            # Calculate and log profitability at chosen power level
+            financial_config = self.config.get("financial_settings", {})
+            if financial_config.get("enable_profitability_optimization", True):
+                miner_efficiency = financial_config.get("miner_efficiency_j_th", 25.0)
+                electricity_cost = financial_config.get("electricity_cost_kwh", 0.10)
+                
+                profitability = self.financial_service.calculate_mining_profitability(
+                    power_target, miner_efficiency, electricity_cost
+                )
+                
+                if profitability:
+                    logging.info(f"Mining profitability at {power_target}W: "
+                               f"${profitability['daily_profit_usd']:.2f}/day profit "
+                               f"({profitability['profit_margin_percent']:.1f}% margin)")
+                    logging.info(f"Hashrate: {profitability['hashrate_th']:.1f} TH/s, "
+                               f"Revenue: ${profitability['daily_revenue_usd']:.2f}/day, "
+                               f"Power cost: ${profitability['daily_electricity_cost']:.2f}/day")
+            
             logging.info(f"Calculated power target: {power_target} watts")
             
             # Set power target on miner
             if self.miner_controller.set_power_target(power_target):
-                # Add training data for ML model
+                # Add training data for ML model (now including financial data)
                 if TF_AVAILABLE and self.power_optimizer:
-                    self.power_optimizer.add_training_data(current_weather, power_target)
+                    enhanced_weather = current_weather.copy()
+                    if bitcoin_price:
+                        enhanced_weather['bitcoin_price'] = bitcoin_price
+                    if hashprice_data:
+                        enhanced_weather['hashprice_usd'] = hashprice_data['usd_per_th_day']
+                        enhanced_weather['network_hashrate'] = hashprice_data['network_hashrate_eh']
+                    
+                    self.power_optimizer.add_training_data(enhanced_weather, power_target)
                 
                 self.last_power_target = power_target
                 logging.info(f"Successfully set power target to {power_target} watts")

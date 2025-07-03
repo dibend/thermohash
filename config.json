@@ -25,6 +25,14 @@
         "current_weather_weight": 0.3,
         "power_smoothing_factor": 0.8
     },
+    "financial_settings": {
+        "enable_profitability_optimization": true,
+        "miner_efficiency_j_th": 25.0,
+        "electricity_cost_kwh": 0.10,
+        "min_profit_margin_percent": 10.0,
+        "max_unprofitable_hours": 2.0,
+        "financial_data_cache_minutes": 5
+    },
     "logging": {
         "level": "INFO",
         "file_path": "/var/log/thermohash.log"
@@ -37,6 +45,12 @@
         "prediction_model_enabled": "Enable ML optimization (requires TensorFlow)",
         "prediction_weight": "Weight given to ML predictions (0.0-1.0)",
         "current_weather_weight": "Weight given to current weather (0.0-1.0)",
-        "power_smoothing_factor": "Smoothing factor for power changes (0.0-1.0, higher = smoother)"
+        "power_smoothing_factor": "Smoothing factor for power changes (0.0-1.0, higher = smoother)",
+        "enable_profitability_optimization": "Enable Bitcoin price and hashprice-based power optimization",
+        "miner_efficiency_j_th": "Miner efficiency in Joules per Terahash (J/TH) - typical modern miners: 20-30 J/TH",
+        "electricity_cost_kwh": "Electricity cost in USD per kWh",
+        "min_profit_margin_percent": "Minimum profit margin required to operate at full power",
+        "max_unprofitable_hours": "Maximum hours to operate unprofitably before reducing power",
+        "financial_data_cache_minutes": "How long to cache Bitcoin price and hashprice data"
     }
 }

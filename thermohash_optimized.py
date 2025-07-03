@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+THIS SHOULD BE A LINTER ERROR#!/usr/bin/env python3
 """
 ThermoHash Optimized - Smart Bitcoin Miner Power Management
 Uses OpenMeteo API weather predictions and TensorFlow CPU for optimal power management

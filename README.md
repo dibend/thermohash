@@ -7,7 +7,7 @@ From a single S9 keeping your living-room cozy to an institutional-scale blockch
 
 ---
 
-## ✨ What's NEW in 2024
+## ✨ What's NEW
 
 1. **Zero-Config IP Geolocation** – auto-detects your coordinates to pull hyper-local weather forecasts (fallback to manual).  
 2. **Machine-Learning Optimizer** – TensorFlow-powered neural network predicts the *optimal* wattage ahead of weather changes.  
@@ -86,8 +86,6 @@ Special perks – swag, priority feature votes, and private Q&A – await our ge
 * **Full User Guide:** [`README_OPTIMIZED.md`](README_OPTIMIZED.md)  
 * **Implementation & Improvements:** [`IMPLEMENTATION_SUMMARY.md`](IMPLEMENTATION_SUMMARY.md) / [`IMPROVEMENTS_SUMMARY.md`](IMPROVEMENTS_SUMMARY.md)  
 * **Weather + Financial API details:** see inline docstrings.  
-* **License:** [MIT](LICENSE)
-
 ---
 
 ### 👥 Join the Community

@@ -1,4 +1,4 @@
-# ThermoHash 🚀 – AI-Powered Bitcoin Miner & Heat-Reuse Platform
+# ThermoHash 🌡️– AI-Powered Bitcoin Miner & Heat-Reuse Platform
 
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/dibend?style=social)](https://github.com/sponsors/dibend)
 [![License](https://img.shields.io/github/license/dibend/thermohash)](LICENSE)

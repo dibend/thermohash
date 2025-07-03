@@ -15,6 +15,9 @@ r>
 - Utilizes `grpcurl` to communicate with Braiins OS over gRPC.
 - Works with miners running **Braiins OS**.
 - Compatible with **Windows** and **Linux**.
+- Live profitability-based power optimization using real-time Bitcoin price (CoinMarketCap) and Luxor Hashprice Index.
+- Automatic IP-based geolocation and weather data via **Open-Meteo**.
+- Interactive `wizard_setup.py` for guided setup of API keys, location, and config.
 
 ---
 
@@ -24,6 +27,10 @@ r>
 2. **`grpcurl`** installed.
 3. **Braiins OS** installed on your miner.
 4. **Port 50051** open and accessible on your miner for gRPC communication.
+5. *(Optional but recommended)* API keys:
+   * `COINMARKETCAP_API_KEY` – free API key from CoinMarketCap for live Bitcoin price.
+   * `LUXOR_API_KEY` – API key from Luxor HashrateIndex for real-time hashprice.
+   These can be stored in a `.env` file — the setup wizard will prompt you.
 
 ---
 
@@ -248,3 +255,20 @@ The StealthMiner JPro+ is a SHA256 miner available on [Structur3.io](https://str
 <p align="center">
   <img src="https://raw.githubusercontent.com/dibend/thermohash/refs/heads/main/Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_8.jpg" alt="Heat Recovery Guide 8">
 </p>
+
+## Quick Start (Wizard)
+
+```bash
+# install dependencies
+pip install -r requirements.txt
+
+# run the interactive wizard
+python wizard_setup.py
+
+# start ThermoHash with live data integrations
+python thermohash_optimized.py
+```
+
+The wizard saves your API keys to a local `.env` file and autodetects your coordinates, writing them to `config.json`, so you can get up and running in under a minute.
+
+---

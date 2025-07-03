@@ -265,8 +265,16 @@ class FinancialDataService:
             now - self.hashprice_cache_time < self.cache_duration):
             return self.cached_hashprice
         
-        # Try to get hashprice from multiple sources
-        hashprice_data = self._get_hashprice_from_calculation()
+        # ---------------------------------------------------
+        # 1) Try Luxor Hashrate Index API first (live data)
+        # ---------------------------------------------------
+        hashprice_data = self._get_hashprice_from_luxor()
+        
+        # ---------------------------------------------------
+        # 2) Fallback: calculate using network statistics
+        # ---------------------------------------------------
+        if not hashprice_data:
+            hashprice_data = self._get_hashprice_from_calculation()
         
         if hashprice_data:
             # Cache the result
@@ -279,6 +287,52 @@ class FinancialDataService:
             return hashprice_data
         
         return None
+    
+    def _get_hashprice_from_luxor(self) -> Optional[Dict]:
+        """Fetch hashprice index from Luxor Hashrate Index API"""
+        try:
+            # GraphQL endpoint documented by Luxor / Hashrate Index
+            url = "https://api.hashrateindex.com/graphql"
+            query = {
+                "query": "{ networkStats { networkHashrate difficulty hashpriceUsd hashpriceBtc } }"
+            }
+            headers = {
+                "Content-Type": "application/json"
+            }
+            response = requests.post(url, json=query, headers=headers, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'data' not in data or 'networkStats' not in data['data']:
+                return None
+            stats = data['data']['networkStats']
+            
+            # Validate required fields
+            usd_per_th_day = stats.get('hashpriceUsd')
+            btc_per_th_day = stats.get('hashpriceBtc')
+            network_hashrate_hs = stats.get('networkHashrate')  # in H/s
+            difficulty = stats.get('difficulty')
+            
+            if usd_per_th_day is None or btc_per_th_day is None or network_hashrate_hs is None:
+                return None
+            
+            # Convert network hashrate to EH/s for consistency
+            network_hashrate_eh = float(network_hashrate_hs) / 1e18
+            
+            return {
+                'usd_per_th_day': float(usd_per_th_day),
+                'btc_per_th_day': float(btc_per_th_day),
+                'network_hashrate_eh': network_hashrate_eh,
+                'network_difficulty': float(difficulty) if difficulty is not None else None,
+                'bitcoin_price': self.cached_bitcoin_price or self.get_bitcoin_price(),
+                'timestamp': datetime.now()
+            }
+        except requests.RequestException as e:
+            logging.debug(f"Luxor API request failed: {e}")
+            return None
+        except (KeyError, ValueError, TypeError) as e:
+            logging.debug(f"Error parsing Luxor API response: {e}")
+            return None
     
     def _get_hashprice_from_calculation(self) -> Optional[Dict]:
         """Calculate hashprice based on current Bitcoin price and network difficulty"""
@@ -940,8 +994,18 @@ class ThermoHashOptimized:
             forecast_hours = prediction_config.get("forecast_hours", 24)
             forecast = self.weather_predictor.get_weather_forecast(forecast_hours)
             
-            # Calculate optimized power target
-            power_target = self.get_optimized_power_target(current_weather, forecast)
+            # -------------------------------------------
+            # Build enhanced weather features for ML
+            # -------------------------------------------
+            enhanced_weather = current_weather.copy()
+            if bitcoin_price is not None:
+                enhanced_weather['bitcoin_price'] = bitcoin_price
+            if hashprice_data is not None:
+                enhanced_weather['hashprice_usd'] = hashprice_data['usd_per_th_day']
+                enhanced_weather['network_hashrate'] = hashprice_data['network_hashrate_eh']
+            
+            # Calculate optimized power target (uses ML & financial data)
+            power_target = self.get_optimized_power_target(enhanced_weather, forecast)
             
             # Calculate and log profitability at chosen power level
             financial_config = self.config.get("financial_settings", {})
@@ -967,13 +1031,6 @@ class ThermoHashOptimized:
             if self.miner_controller.set_power_target(power_target):
                 # Add training data for ML model (now including financial data)
                 if TF_AVAILABLE and self.power_optimizer:
-                    enhanced_weather = current_weather.copy()
-                    if bitcoin_price:
-                        enhanced_weather['bitcoin_price'] = bitcoin_price
-                    if hashprice_data:
-                        enhanced_weather['hashprice_usd'] = hashprice_data['usd_per_th_day']
-                        enhanced_weather['network_hashrate'] = hashprice_data['network_hashrate_eh']
-                    
                     self.power_optimizer.add_training_data(enhanced_weather, power_target)
                 
                 self.last_power_target = power_target

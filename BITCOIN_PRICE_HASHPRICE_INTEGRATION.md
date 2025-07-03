@@ -6,15 +6,23 @@ The ThermoHash Optimized algorithm now includes live Bitcoin price and hashprice
 
 ## New Features
 
-### 1. Financial Data Service
+### 1. Enhanced Financial Data Service
 
-The new `FinancialDataService` class provides:
+The enhanced `FinancialDataService` class provides:
 
-- **Live Bitcoin Price**: Fetched from CoinGecko API with 5-minute caching
-- **Hashprice Calculation**: Real-time calculation based on:
+- **Live Bitcoin Price**: Multi-source fetching with fallbacks:
+  - Primary: CoinGecko API
+  - Backup: CoinDesk API, Binance API
+  - 5-minute caching for efficiency
+- **Luxor Hashprice Index**: Direct integration with Luxor's hashprice API
+- **Hashprice Calculation**: Real-time calculation fallback based on:
   - Current Bitcoin price
-  - Network hashrate and difficulty
+  - Network hashrate and difficulty from multiple sources
   - Block rewards (post-halving: 3.125 BTC)
+- **Enhanced Network Data**: Multiple API sources for redundancy:
+  - Blockchain.info API
+  - Blockchair.com API  
+  - Automatic fallback to estimated values
 - **Mining Profitability Analysis**: Comprehensive profit/loss calculations
 
 ### 2. Profitability-Based Power Optimization
@@ -47,7 +55,13 @@ Add the following section to your `config.json`:
     "electricity_cost_kwh": 0.10,
     "min_profit_margin_percent": 10.0,
     "max_unprofitable_hours": 2.0,
-    "financial_data_cache_minutes": 5
+    "financial_data_cache_minutes": 5,
+    "prefer_luxor_hashprice": true,
+    "enable_realtime_price_updates": false,
+    "api_timeout_seconds": 15,
+    "bitcoin_price_apis": ["coingecko", "coindesk", "binance"],
+    "hashprice_apis": ["luxor", "calculated"],
+    "network_data_apis": ["blockchain.info", "blockchair.com"]
 }
 ```
 
@@ -61,6 +75,12 @@ Add the following section to your `config.json`:
 | `min_profit_margin_percent` | Minimum profit margin to operate at full power | `10.0` |
 | `max_unprofitable_hours` | Max hours to operate unprofitably | `2.0` |
 | `financial_data_cache_minutes` | Cache duration for financial data | `5` |
+| `prefer_luxor_hashprice` | Prioritize Luxor API over calculated hashprice | `true` |
+| `enable_realtime_price_updates` | Enable WebSocket real-time price updates | `false` |
+| `api_timeout_seconds` | Timeout for API requests in seconds | `15` |
+| `bitcoin_price_apis` | Ordered list of Bitcoin price API sources | `["coingecko", "coindesk", "binance"]` |
+| `hashprice_apis` | Ordered list of hashprice data sources | `["luxor", "calculated"]` |
+| `network_data_apis` | Ordered list of network data API sources | `["blockchain.info", "blockchair.com"]` |
 
 ## How It Works
 
@@ -105,19 +125,33 @@ The enhanced neural network considers:
 ### Bitcoin Price Data
 
 - **Primary Source**: CoinGecko API (free tier)
-- **Endpoint**: `https://api.coingecko.com/api/v3/simple/price`
+  - **Endpoint**: `https://api.coingecko.com/api/v3/simple/price`
+  - **Includes**: Price, 24h change, market cap
+- **Backup Sources**:
+  - CoinDesk API: `https://api.coindesk.com/v1/bpi/currentprice.json`
+  - Binance API: `https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT`
 - **Update Frequency**: Every 5 minutes (cached)
-- **Includes**: Price, 24h change, market cap
+- **Failover**: Automatic fallback to backup sources if primary fails
+
+### Luxor Hashprice Index
+
+- **Primary Source**: Luxor Technologies API
+  - **Endpoint**: `https://api.luxor.tech/v1/mining/hashprice`
+  - **Data**: Real-time hashprice in USD/TH/day and BTC/TH/day
+  - **Update Frequency**: Real-time with 5-minute caching
+- **Fallback**: Calculated hashprice when Luxor API unavailable
 
 ### Network Hashrate Data
 
-- **Primary Source**: Blockchain.info API
+- **Primary Sources**:
+  - Blockchain.info API: `https://api.blockchain.info/stats`
+  - Blockchair.com API: `https://api.blockchair.com/bitcoin/stats`
 - **Fallback**: Estimated values based on recent network averages
 - **Data Points**: Network hashrate, difficulty, block times
 
-### Hashprice Calculation
+### Hashprice Calculation (Fallback)
 
-The hashprice is calculated using the formula:
+When direct hashprice APIs are unavailable, the system calculates using:
 
 ```
 Daily Hashprice (USD/TH) = (Block Reward × Blocks/Day × BTC Price) / Network Hashrate (TH)
@@ -126,7 +160,7 @@ Daily Hashprice (USD/TH) = (Block Reward × Blocks/Day × BTC Price) / Network H
 Where:
 - Block Reward = 3.125 BTC (post-halving)
 - Blocks/Day ≈ 144 blocks
-- Network Hashrate = Current network hashrate in TH/s
+- Network Hashrate = Current network hashrate in TH/s from multiple APIs
 
 ## Logging and Monitoring
 
@@ -135,9 +169,12 @@ Where:
 The algorithm now logs:
 
 ```
-[INFO] Current Bitcoin price: $67,234.56
-[INFO] Current hashprice: $52.34/TH/day (0.00077865 BTC/TH/day)
-[INFO] Network hashrate: 583.2 EH/s
+[INFO] Bitcoin price: $67,234.56
+[INFO] Bitcoin price from CoinDesk backup: $67,156.23
+[INFO] Hashprice (USD): $52.34/TH/day
+[INFO] Hashprice (BTC): 0.00077865 BTC/TH/day
+[INFO] Data source: Luxor API
+[INFO] Network data from blockchain.info: 583.2 EH/s
 [INFO] Mining profitability at 800W: $24.67/day profit (18.2% margin)
 [INFO] Hashrate: 32.0 TH/s, Revenue: $135.45/day, Power cost: $110.78/day
 [INFO] Optimal profitable power: 850W (margin: 15.3%, profit: $20.89/day)

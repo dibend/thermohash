@@ -191,7 +191,17 @@ class FinancialDataService:
     
     def __init__(self):
         self.bitcoin_api_url = "https://api.coingecko.com/api/v3/simple/price"
+        self.bitcoin_backup_apis = [
+            "https://api.coindesk.com/v1/bpi/currentprice.json",
+            "https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT"
+        ]
+        self.luxor_hashprice_api = "https://api.luxor.tech/v1/mining/hashprice"
         self.hashprice_apis = [
+            {
+                'name': 'luxor.tech',
+                'url': 'https://api.luxor.tech/v1/mining/hashprice',
+                'timeout': 10
+            },
             {
                 'name': 'hashrateindex.com',
                 'url': 'https://api.hashrateindex.com/graphql',
@@ -250,10 +260,43 @@ class FinancialDataService:
                 
         except requests.RequestException as e:
             logging.error(f"Error fetching Bitcoin price: {e}")
-            return None
+            # Try backup APIs
+            return self._get_bitcoin_price_backup()
         except (KeyError, ValueError) as e:
             logging.error(f"Error parsing Bitcoin price data: {e}")
             return None
+    
+    def _get_bitcoin_price_backup(self) -> Optional[float]:
+        """Try backup Bitcoin price APIs"""
+        try:
+            # Try CoinDesk API
+            response = requests.get(self.bitcoin_backup_apis[0], timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'bpi' in data and 'USD' in data['bpi'] and 'rate_float' in data['bpi']['USD']:
+                price = float(data['bpi']['USD']['rate_float'])
+                logging.info(f"Bitcoin price from CoinDesk backup: ${price:,.2f}")
+                return price
+                
+        except Exception as e:
+            logging.warning(f"CoinDesk backup API failed: {e}")
+        
+        try:
+            # Try Binance API
+            response = requests.get(self.bitcoin_backup_apis[1], timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            if 'price' in data:
+                price = float(data['price'])
+                logging.info(f"Bitcoin price from Binance backup: ${price:,.2f}")
+                return price
+                
+        except Exception as e:
+            logging.warning(f"Binance backup API failed: {e}")
+        
+        return None
     
     def get_hashprice_index(self) -> Optional[Dict]:
         """Get current hashprice index data with multiple fallback methods"""
@@ -266,7 +309,11 @@ class FinancialDataService:
             return self.cached_hashprice
         
         # Try to get hashprice from multiple sources
-        hashprice_data = self._get_hashprice_from_calculation()
+        # First try Luxor API, then fallback to calculation
+        hashprice_data = self._get_hashprice_from_luxor()
+        
+        if not hashprice_data:
+            hashprice_data = self._get_hashprice_from_calculation()
         
         if hashprice_data:
             # Cache the result
@@ -275,10 +322,65 @@ class FinancialDataService:
             
             logging.info(f"Hashprice (USD): ${hashprice_data['usd_per_th_day']:.2f}/TH/day")
             logging.info(f"Hashprice (BTC): {hashprice_data['btc_per_th_day']:.8f} BTC/TH/day")
+            if 'source' in hashprice_data:
+                logging.info(f"Data source: {hashprice_data['source']}")
             
             return hashprice_data
         
         return None
+    
+    def _get_hashprice_from_luxor(self) -> Optional[Dict]:
+        """Get hashprice data from Luxor API"""
+        try:
+            response = requests.get(self.luxor_hashprice_api, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            
+            # Luxor API response structure may vary, adapt as needed
+            if 'data' in data and isinstance(data['data'], list) and len(data['data']) > 0:
+                latest_data = data['data'][0]  # Most recent data point
+                
+                # Extract hashprice data
+                usd_per_th_day = float(latest_data.get('hashprice_usd', 0))
+                btc_per_th_day = float(latest_data.get('hashprice_btc', 0))
+                
+                if usd_per_th_day > 0 and btc_per_th_day > 0:
+                    bitcoin_price = usd_per_th_day / btc_per_th_day if btc_per_th_day > 0 else None
+                    
+                    return {
+                        'usd_per_th_day': usd_per_th_day,
+                        'btc_per_th_day': btc_per_th_day,
+                        'bitcoin_price': bitcoin_price,
+                        'source': 'Luxor API',
+                        'timestamp': datetime.now()
+                    }
+            
+            # Alternative response structure handling
+            elif 'hashprice' in data:
+                hashprice_info = data['hashprice']
+                usd_per_th_day = float(hashprice_info.get('usd_per_th_per_day', 0))
+                btc_per_th_day = float(hashprice_info.get('btc_per_th_per_day', 0))
+                
+                if usd_per_th_day > 0 and btc_per_th_day > 0:
+                    bitcoin_price = usd_per_th_day / btc_per_th_day if btc_per_th_day > 0 else None
+                    
+                    return {
+                        'usd_per_th_day': usd_per_th_day,
+                        'btc_per_th_day': btc_per_th_day,
+                        'bitcoin_price': bitcoin_price,
+                        'source': 'Luxor API',
+                        'timestamp': datetime.now()
+                    }
+            
+            logging.warning("Luxor API response format not recognized")
+            return None
+            
+        except requests.RequestException as e:
+            logging.warning(f"Luxor API request failed: {e}")
+            return None
+        except (KeyError, ValueError, TypeError) as e:
+            logging.warning(f"Error parsing Luxor API data: {e}")
+            return None
     
     def _get_hashprice_from_calculation(self) -> Optional[Dict]:
         """Calculate hashprice based on current Bitcoin price and network difficulty"""
@@ -307,6 +409,7 @@ class FinancialDataService:
                 'network_hashrate_eh': network_data['hashrate_eh'],
                 'network_difficulty': network_data['difficulty'],
                 'bitcoin_price': btc_price,
+                'source': 'Calculated from BTC price + network data',
                 'timestamp': datetime.now()
             }
             
@@ -315,45 +418,87 @@ class FinancialDataService:
             return None
     
     def _get_bitcoin_network_data(self) -> Optional[Dict]:
-        """Get Bitcoin network hashrate and difficulty data"""
+        """Get Bitcoin network hashrate and difficulty data from multiple sources"""
         try:
             # Try multiple APIs for Bitcoin network data
             apis = [
                 {
-                    'url': 'https://blockstream.info/api/blocks/tip/height',
-                    'stats_url': 'https://api.blockchain.info/stats'
+                    'name': 'blockchain.info',
+                    'url': 'https://api.blockchain.info/stats',
+                    'hashrate_key': 'hash_rate',  # GH/s
+                    'difficulty_key': 'difficulty'
+                },
+                {
+                    'name': 'blockchair.com',
+                    'url': 'https://api.blockchair.com/bitcoin/stats',
+                    'hashrate_key': 'hashrate_24h',  # H/s
+                    'difficulty_key': 'difficulty'
+                },
+                {
+                    'name': 'coinwarz.com',
+                    'url': 'https://www.coinwarz.com/mining/bitcoin/difficulty-chart',
+                    'custom': True  # Custom parsing needed
                 }
             ]
             
             for api in apis:
                 try:
+                    if api.get('custom'):
+                        continue  # Skip custom APIs for now
+                    
                     # Get network stats
-                    response = requests.get(api['stats_url'], timeout=10)
+                    response = requests.get(api['url'], timeout=15)
                     response.raise_for_status()
                     data = response.json()
                     
-                    if 'hash_rate' in data and 'difficulty' in data:
+                    # Handle blockchain.info format
+                    if api['name'] == 'blockchain.info' and 'hash_rate' in data and 'difficulty' in data:
                         # hash_rate is in GH/s, convert to TH/s and EH/s
                         hashrate_gh = float(data['hash_rate'])
                         hashrate_th = hashrate_gh / 1000  # GH/s to TH/s
                         hashrate_eh = hashrate_th / 1000000  # TH/s to EH/s
                         difficulty = float(data['difficulty'])
                         
+                        logging.info(f"Network data from {api['name']}: {hashrate_eh:.1f} EH/s")
                         return {
                             'hashrate_th': hashrate_th,
                             'hashrate_eh': hashrate_eh,
-                            'difficulty': difficulty
+                            'difficulty': difficulty,
+                            'source': api['name']
                         }
+                    
+                    # Handle blockchair.com format
+                    elif api['name'] == 'blockchair.com' and 'data' in data:
+                        stats = data['data']
+                        if 'hashrate_24h' in stats and 'difficulty' in stats:
+                            # hashrate_24h is in H/s, convert to TH/s and EH/s
+                            hashrate_h = float(stats['hashrate_24h'])
+                            hashrate_th = hashrate_h / 1e12  # H/s to TH/s
+                            hashrate_eh = hashrate_th / 1000000  # TH/s to EH/s
+                            difficulty = float(stats['difficulty'])
+                            
+                            logging.info(f"Network data from {api['name']}: {hashrate_eh:.1f} EH/s")
+                            return {
+                                'hashrate_th': hashrate_th,
+                                'hashrate_eh': hashrate_eh,
+                                'difficulty': difficulty,
+                                'source': api['name']
+                            }
                         
-                except requests.RequestException:
+                except requests.RequestException as e:
+                    logging.warning(f"{api['name']} API failed: {e}")
+                    continue
+                except (KeyError, ValueError, TypeError) as e:
+                    logging.warning(f"Error parsing {api['name']} data: {e}")
                     continue
             
             # Fallback: use estimated values based on recent averages
-            logging.warning("Using estimated network data as fallback")
+            logging.warning("All network APIs failed, using estimated data as fallback")
             return {
                 'hashrate_th': 600000000,  # ~600 EH/s estimated
                 'hashrate_eh': 600,
-                'difficulty': 83000000000000  # Approximate current difficulty
+                'difficulty': 83000000000000,  # Approximate current difficulty
+                'source': 'estimated_fallback'
             }
             
         except Exception as e:

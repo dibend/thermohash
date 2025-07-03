@@ -31,7 +31,13 @@
         "electricity_cost_kwh": 0.10,
         "min_profit_margin_percent": 10.0,
         "max_unprofitable_hours": 2.0,
-        "financial_data_cache_minutes": 5
+        "financial_data_cache_minutes": 5,
+        "prefer_luxor_hashprice": true,
+        "enable_realtime_price_updates": false,
+        "api_timeout_seconds": 15,
+        "bitcoin_price_apis": ["coingecko", "coindesk", "binance"],
+        "hashprice_apis": ["luxor", "calculated"],
+        "network_data_apis": ["blockchain.info", "blockchair.com"]
     },
     "logging": {
         "level": "INFO",

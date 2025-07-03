@@ -83,9 +83,8 @@ Special perks – swag, priority feature votes, and private Q&A – await our ge
 
 ## 📄 Documentation & Resources
 
-* **Full User Guide:** [`README_OPTIMIZED.md`](README_OPTIMIZED.md)  
-* **Implementation & Improvements:** [`IMPLEMENTATION_SUMMARY.md`](IMPLEMENTATION_SUMMARY.md) / [`IMPROVEMENTS_SUMMARY.md`](IMPROVEMENTS_SUMMARY.md)  
-* **Weather + Financial API details:** see inline docstrings.  
+* **Weather + Financial API details:** see inline docstrings.
+
 ---
 
 ### 👥 Join the Community

@@ -190,14 +190,25 @@ class FinancialDataService:
     """Handles Bitcoin price and Luxor hashprice data fetching"""
     
     def __init__(self):
-        self.bitcoin_api_url = "https://api.coingecko.com/api/v3/simple/price"
+        # Add support for CoinMarketCap & Luxor API keys from environment variables
+        self.coinmarketcap_api_key = os.getenv("COINMARKETCAP_API_KEY")
+        self.luxor_api_key = os.getenv("LUXOR_API_KEY")
+        # Prefer CoinMarketCap if key is present, else fallback to CoinGecko
+        self.bitcoin_api_url = (
+            "https://pro-api.coinmarketcap.com/v1/cryptocurrency/quotes/latest"
+            if self.coinmarketcap_api_key
+            else "https://api.coingecko.com/api/v3/simple/price"
+        )
+        # Hashprice endpoints – we will try the official Luxor GraphQL if key provided, then fallback to calculation
+        self.luxor_graphql_endpoint = "https://api.hashrateindex.com/graphql"
         self.hashprice_apis = [
             {
-                'name': 'hashrateindex.com',
-                'url': 'https://api.hashrateindex.com/graphql',
-                'timeout': 10
+                'name': 'LuxorHashpriceGraphQL',
+                'url': self.luxor_graphql_endpoint,
+                'timeout': 10,
             }
         ]
+        # Existing cache attributes
         self.cached_bitcoin_price = None
         self.cached_hashprice = None
         self.bitcoin_cache_time = None
@@ -205,80 +216,163 @@ class FinancialDataService:
         self.cache_duration = timedelta(minutes=5)  # Cache for 5 minutes
     
     def get_bitcoin_price(self) -> Optional[float]:
-        """Get current Bitcoin price in USD with caching"""
+        """Get current Bitcoin price in USD with caching – tries CoinMarketCap first, then CoinGecko."""
         now = datetime.now()
-        
-        # Check cache first
-        if (self.cached_bitcoin_price is not None and 
-            self.bitcoin_cache_time is not None and 
-            now - self.bitcoin_cache_time < self.cache_duration):
+        if (
+            self.cached_bitcoin_price is not None
+            and self.bitcoin_cache_time is not None
+            and now - self.bitcoin_cache_time < self.cache_duration
+        ):
             return self.cached_bitcoin_price
-        
+
+        # 1. Attempt CoinMarketCap if API key present
+        if self.coinmarketcap_api_key:
+            price = self._get_btc_price_coinmarketcap()
+            if price is not None:
+                return price  # Successfully fetched & cached inside helper
+
+        # 2. Fallback to CoinGecko (existing logic)
         try:
             params = {
                 'ids': 'bitcoin',
                 'vs_currencies': 'usd',
                 'include_24hr_change': 'true',
-                'include_market_cap': 'true'
+                'include_market_cap': 'true',
             }
-            
             response = requests.get(self.bitcoin_api_url, params=params, timeout=10)
             response.raise_for_status()
             data = response.json()
-            
             if 'bitcoin' in data and 'usd' in data['bitcoin']:
                 price = float(data['bitcoin']['usd'])
-                
-                # Cache the result
+                # Cache
                 self.cached_bitcoin_price = price
                 self.bitcoin_cache_time = now
-                
-                # Log additional info if available
                 change_24h = data['bitcoin'].get('usd_24h_change')
                 market_cap = data['bitcoin'].get('usd_market_cap')
-                
-                logging.info(f"Bitcoin price: ${price:,.2f}")
+                logging.info(f"Bitcoin price (CoinGecko): ${price:,.2f}")
                 if change_24h is not None:
                     logging.info(f"24h change: {change_24h:+.2f}%")
                 if market_cap is not None:
                     logging.info(f"Market cap: ${market_cap:,.0f}")
-                
                 return price
             else:
-                logging.error("Invalid Bitcoin price data format")
-                return None
-                
+                logging.error("Invalid Bitcoin price data format from CoinGecko")
         except requests.RequestException as e:
-            logging.error(f"Error fetching Bitcoin price: {e}")
-            return None
+            logging.error(f"Error fetching Bitcoin price from CoinGecko: {e}")
         except (KeyError, ValueError) as e:
-            logging.error(f"Error parsing Bitcoin price data: {e}")
+            logging.error(f"Error parsing Bitcoin price data from CoinGecko: {e}")
+        return None
+
+    def _get_btc_price_coinmarketcap(self) -> Optional[float]:
+        """Internal helper to fetch BTC price from CoinMarketCap."""
+        try:
+            headers = {
+                'Accepts': 'application/json',
+                'X-CMC_PRO_API_KEY': self.coinmarketcap_api_key,
+            }
+            params = {
+                'symbol': 'BTC',
+                'convert': 'USD',
+            }
+            response = requests.get(self.bitcoin_api_url, headers=headers, params=params, timeout=10)
+            response.raise_for_status()
+            data = response.json()
+            price = float(data['data']['BTC']['quote']['USD']['price'])
+            now = datetime.now()
+            # Cache result
+            self.cached_bitcoin_price = price
+            self.bitcoin_cache_time = now
+            logging.info(f"Bitcoin price (CoinMarketCap): ${price:,.2f}")
+            return price
+        except (requests.RequestException, KeyError, ValueError) as e:
+            logging.warning(f"CoinMarketCap price fetch failed: {e}")
             return None
     
     def get_hashprice_index(self) -> Optional[Dict]:
-        """Get current hashprice index data with multiple fallback methods"""
+        """Get current hashprice index – tries Luxor API if key available, else falls back to internal calculation."""
         now = datetime.now()
-        
-        # Check cache first
-        if (self.cached_hashprice is not None and 
-            self.hashprice_cache_time is not None and 
-            now - self.hashprice_cache_time < self.cache_duration):
+        if (
+            self.cached_hashprice is not None
+            and self.hashprice_cache_time is not None
+            and now - self.hashprice_cache_time < self.cache_duration
+        ):
             return self.cached_hashprice
-        
-        # Try to get hashprice from multiple sources
+
+        # 1. Attempt Luxor Hashprice GraphQL API
+        if self.luxor_api_key:
+            luxor_data = self._get_hashprice_from_luxor()
+            if luxor_data is not None:
+                # Cache and return
+                self.cached_hashprice = luxor_data
+                self.hashprice_cache_time = now
+                logging.info(
+                    f"Hashprice (Luxor): ${luxor_data['usd_per_th_day']:.2f}/TH/day ({luxor_data['btc_per_th_day']:.8f} BTC/TH/day)"
+                )
+                return luxor_data
+
+        # 2. Fallback to local calculation
         hashprice_data = self._get_hashprice_from_calculation()
-        
         if hashprice_data:
-            # Cache the result
             self.cached_hashprice = hashprice_data
             self.hashprice_cache_time = now
-            
-            logging.info(f"Hashprice (USD): ${hashprice_data['usd_per_th_day']:.2f}/TH/day")
-            logging.info(f"Hashprice (BTC): {hashprice_data['btc_per_th_day']:.8f} BTC/TH/day")
-            
+            logging.info(
+                f"Hashprice (calculated): ${hashprice_data['usd_per_th_day']:.2f}/TH/day ({hashprice_data['btc_per_th_day']:.8f} BTC/TH/day)"
+            )
             return hashprice_data
-        
         return None
+
+    def _get_hashprice_from_luxor(self) -> Optional[Dict]:
+        """Fetch hashprice index directly from Luxor HashrateIndex GraphQL API."""
+        try:
+            query = (
+                "query { getHashprice { btcHashprice usdHashprice networkHashrate difficulty } }"
+            )
+            headers = {
+                'Content-Type': 'application/json',
+                'X-API-KEY': self.luxor_api_key,
+            }
+            resp = requests.post(
+                self.luxor_graphql_endpoint,
+                json={'query': query},
+                headers=headers,
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            # Attempt to parse accommodating possible field names
+            hp = None
+            if 'data' in data:
+                if 'getHashprice' in data['data']:
+                    hp = data['data']['getHashprice']
+                elif 'getHashpriceIndex' in data['data']:
+                    hp = data['data']['getHashpriceIndex']
+            if not hp:
+                logging.warning("Unexpected Luxor hashprice response format")
+                return None
+            usd_hp = float(hp.get('usdHashprice') or hp.get('usd_hashprice') or hp.get('usd_per_th_day') or 0)
+            btc_hp = float(hp.get('btcHashprice') or hp.get('btc_hashprice') or hp.get('btc_per_th_day') or 0)
+            if usd_hp == 0:
+                return None
+            # Network stats optional
+            net_hashrate_eh = None
+            difficulty = None
+            if hp.get('networkHashrate'):
+                net_hashrate_eh = float(hp['networkHashrate'])
+            elif hp.get('network_hashrate'):
+                net_hashrate_eh = float(hp['network_hashrate'])
+            if hp.get('difficulty'):
+                difficulty = float(hp['difficulty'])
+            return {
+                'usd_per_th_day': usd_hp,
+                'btc_per_th_day': btc_hp if btc_hp else None,
+                'network_hashrate_eh': net_hashrate_eh,
+                'network_difficulty': difficulty,
+                'bitcoin_price': self.get_bitcoin_price(),
+                'timestamp': datetime.now(),
+            }
+        except (requests.RequestException, ValueError, KeyError) as e:
+            logging.warning(f"Luxor hashprice fetch failed: {e}")
+            return None
     
     def _get_hashprice_from_calculation(self) -> Optional[Dict]:
         """Calculate hashprice based on current Bitcoin price and network difficulty"""

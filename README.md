@@ -77,7 +77,6 @@ ThermoHash is 100 % open-source and community-driven.  If this project reduces y
 * Native Prometheus/Grafana integration
 * Advanced ML models & edge deployments
 
-Special perks – swag, priority feature votes, and private Q&A – await our generous backers.
 
 ---
 

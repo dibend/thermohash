@@ -3,7 +3,7 @@
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/dibend?style=social)](https://github.com/sponsors/dibend)
 [![License](https://img.shields.io/github/license/dibend/thermohash)](LICENSE)
 
-From a single S19 keeping your living-room cozy to an institutional-scale blockchain datacenter running **thousands** of ASICs – **ThermoHash** turns excess mining heat into intelligent, profitable energy while slashing setup time to *minutes*.
+ThermoHash is an open-source, cross-platform Python system that transforms any Braiins-OS/LuxOS Bitcoin ASIC into a smart, ML-driven heat-reuse appliance. By fusing automatic IP-based geolocation, 72-hour weather forecasting, live Bitcoin/hash-price feeds, and a lightweight TensorFlow model, ThermoHash predicts and sets your miner's optimal wattage—keeping homes comfortable or datacenters profitable while slashing energy waste. One-line installers, an interactive CLI wizard, systemd/Windows service support, and rich JSON logs make deployment painless from a single S19 in a living room to thousands of immersion-cooled rigs in an industrial farm.
 
 ---
 

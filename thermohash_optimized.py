@@ -14,6 +14,7 @@ import requests
 import logging
 import platform
 import sys
+import argparse
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE, DEVNULL
 import numpy as np
@@ -720,12 +721,33 @@ class MinerController:
 class ThermoHashOptimized:
     """Main ThermoHash application with ML optimization and auto-geolocation"""
     
-    def __init__(self, config_path: str = "config.json"):
+    def __init__(self, config_path: str = "config.json", simulate: bool = False):
         self.config = self._load_config(config_path)
+
+        # Simulation flag (stub API responses & disable miner calls)
+        self.simulate = simulate
+
+        # If running in simulation, ensure we write logs to a local file to avoid permission issues
+        if self.simulate:
+            self.config.setdefault("logging", {})
+            self.config["logging"]["file_path"] = "thermohash_sim.log"
+
+        # Setup logging AFTER potential simulation adjustments
         self._setup_logging()
-        
-        # Get coordinates (auto-detect or use configured)
-        self.lat, self.lon = self._get_coordinates()
+
+        # Get coordinates (auto-detect or use configured) – skip external lookup in simulation
+        if self.simulate:
+            config_lat = self.config.get("latitude", 40.7128)
+            config_lon = self.config.get("longitude", -74.0060)
+
+            if config_lat is None:
+                config_lat = 40.7128
+            if config_lon is None:
+                config_lon = -74.0060
+
+            self.lat, self.lon = float(config_lat), float(config_lon)
+        else:
+            self.lat, self.lon = self._get_coordinates()
         
         # Initialize components
         self.weather_predictor = WeatherPredictor(self.lat, self.lon)
@@ -746,6 +768,10 @@ class ThermoHashOptimized:
         self.last_training = None
         self.last_power_target = None
         self.last_profitability = None
+        
+        # Enable simulation stubs if requested
+        if self.simulate:
+            self._enable_simulation_mode()
         
     def _get_coordinates(self) -> Tuple[float, float]:
         """Get coordinates from config or auto-detect via IP geolocation"""
@@ -1102,6 +1128,51 @@ class ThermoHashOptimized:
                 else:
                     logging.warning("Model retraining failed")
     
+    def _enable_simulation_mode(self):
+        """Patch external API calls with static data for offline testing"""
+        logging.warning("Running in SIMULATION mode – external API calls are stubbed.")
+
+        def fake_current_weather():
+            return {
+                'temperature': 20.0,
+                'humidity': 50,
+                'wind_speed': 5,
+                'wind_direction': 180,
+                'weather_code': 0,
+                'timestamp': datetime.now()
+            }
+
+        def fake_forecast(hours: int = 24):
+            base = datetime.now()
+            return [
+                {
+                    'temperature': 20.0 + (i % 5),
+                    'humidity': 50,
+                    'wind_speed': 5,
+                    'wind_direction': 180,
+                    'weather_code': 0,
+                    'timestamp': base + timedelta(hours=i)
+                } for i in range(hours)
+            ]
+
+        # Stub weather services
+        self.weather_predictor.get_current_weather = fake_current_weather  # type: ignore
+        self.weather_predictor.get_weather_forecast = fake_forecast  # type: ignore
+
+        # Stub financial services
+        self.financial_service.get_bitcoin_price = lambda: 60000.0  # type: ignore
+        self.financial_service.get_hashprice_index = lambda: {
+            'usd_per_th_day': 0.06,
+            'btc_per_th_day': 0.000001,
+            'network_hashrate_eh': 600,
+            'network_difficulty': 83000000000000,
+            'bitcoin_price': 60000.0,
+            'timestamp': datetime.now()
+        }  # type: ignore
+
+        # Stub miner controller so no real calls are made
+        self.miner_controller.set_power_target = lambda power: True  # type: ignore
+    
     def run(self):
         """Main application loop"""
         logging.info("ThermoHash Optimized with Auto-Geolocation starting up")
@@ -1132,8 +1203,13 @@ class ThermoHashOptimized:
 
 def main():
     """Entry point"""
+    parser = argparse.ArgumentParser(description="ThermoHash Optimized")
+    parser.add_argument("--config", type=str, default="config.json", help="Path to configuration JSON file")
+    parser.add_argument("--simulate", action="store_true", help="Run in simulation mode with stubbed APIs")
+    args = parser.parse_args()
+
     try:
-        app = ThermoHashOptimized()
+        app = ThermoHashOptimized(config_path=args.config, simulate=args.simulate)
         app.run()
     except Exception as e:
         logging.error(f"Fatal error: {e}")

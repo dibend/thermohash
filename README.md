@@ -52,6 +52,21 @@ python thermohash_optimized.py
 ```
 *Windows users:* just double-click `install.bat`.
 
+## 🧪 Running Tests
+
+ThermoHash includes a lightweight test-suite powered by **pytest**. Running it is optional but recommended after you make changes or before you submit a pull-request.
+
+```bash
+# From the repository root
+pip install -r requirements.txt  # if you did not run install.sh / install.bat
+pytest -q                        # execute all tests quietly
+```
+
+Notes:
+1. The geolocation test requires external network calls and is **skipped by default** via `pytest.skip(...)` – the rest of the suite is fully offline-friendly.
+2. Use `pytest -vv` for verbose output or `pytest tests/` to target a specific folder.
+3. Feel free to remove the skip marker if you wish to test the live geolocation flow.
+
 ---
 
 ## 📚 Feature Deep-Dive

@@ -531,7 +531,8 @@ class PowerOptimizer:
         # Enhanced neural network for power prediction with financial features
         # Input features: weather (6) + financial (3) = 9 features
         self.model = tf.keras.Sequential([
-            tf.keras.layers.Dense(64, activation='relu', input_shape=(9,)),
+            tf.keras.Input(shape=(9,)),
+            tf.keras.layers.Dense(64, activation='relu'),
             tf.keras.layers.Dropout(0.3),
             tf.keras.layers.Dense(32, activation='relu'),
             tf.keras.layers.Dropout(0.2),

@@ -14,6 +14,22 @@ except ImportError as e:
     sys.exit(1)
 
 
+# --- Helper functions ---------------------------------------------------
+
+def _get_valid_coordinates():
+    """Detect and validate the current public IP coordinates.
+
+    Returns (lat, lon) if successful and valid, otherwise (None, None).
+    """
+    geo_service = GeolocationService()
+    location = geo_service.get_location_from_ip()
+    if location:
+        lat, lon = location
+        if geo_service.validate_coordinates(lat, lon):
+            return lat, lon
+    return None, None
+
+
 def test_geolocation():
     """Test the IP-based geolocation functionality"""
     print("\n🌍 Testing IP-based Geolocation...")
@@ -29,20 +45,16 @@ def test_geolocation():
         print(f"✅ Location detected: {lat:.4f}, {lon:.4f}")
 
         # Validate coordinates
-        if geo_service.validate_coordinates(lat, lon):
-            print("✅ Coordinates are valid")
-        else:
-            print("❌ Invalid coordinates detected")
+        assert geo_service.validate_coordinates(lat, lon), "Invalid coordinates detected"
 
-        return lat, lon
     else:
         print("❌ Auto-geolocation failed")
-        return None, None
+        pytest.skip("Auto-geolocation failed; skipping dependent tests")
 
 
 def test_weather_api():
     """Test weather API with detected coordinates"""
-    lat, lon = test_geolocation()
+    lat, lon = _get_valid_coordinates()
     if lat is None or lon is None:
         print("\n❌ Skipping weather test - no valid coordinates")
         pytest.skip("No valid coordinates detected")
@@ -80,7 +92,7 @@ def test_weather_api():
 
 def test_config_saving():
     """Test saving coordinates to config"""
-    lat, lon = test_geolocation()
+    lat, lon = _get_valid_coordinates()
     if lat is None or lon is None:
         print("\n❌ Skipping config test - no valid coordinates")
         pytest.skip("No valid coordinates detected")

@@ -4,6 +4,15 @@
     "miner_address": "192.168.1.100",
     "username": "root",
     "password": "your_password",
+    "subnet": null,
+    "miners": [
+        {
+            "address": "192.168.1.100",
+            "username": "root",
+            "password": "your_password",
+            "os": "braiins"
+        }
+    ],
     "temp_thresholds": {
         "10.0": 1000,
         "15.0": 900,
@@ -40,6 +49,8 @@
     "_comments": {
         "latitude": "Leave as null for automatic IP-based detection, or set to your latitude (e.g., 40.6982)",
         "longitude": "Leave as null for automatic IP-based detection, or set to your longitude (e.g., -74.4014)",
+        "subnet": "Optional subnet for auto-discovery of miners (e.g., 192.168.1.0/24)",
+        "miners": "List of ASIC miners with address, credentials, and OS type (braiins or luxos)",
         "temp_thresholds": "Temperature (°C) to power (watts) mapping",
         "forecast_hours": "Hours of weather forecast to use (1-72)",
         "prediction_model_enabled": "Enable ML optimization (requires TensorFlow)",

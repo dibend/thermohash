@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Scan Results</title>
+</head>
+<body>
+    <h1>Detected ASICs</h1>
+    {% if miners %}
+    <form action="/save" method="post">
+        <table border="1">
+            <tr><th>Address</th><th>OS</th></tr>
+            {% for m in miners %}
+            <tr>
+                <td>{{ m.address }}<input type="hidden" name="address" value="{{ m.address }}" /></td>
+                <td>{{ m.os }}<input type="hidden" name="os" value="{{ m.os }}" /></td>
+            </tr>
+            {% endfor %}
+        </table>
+        <label>Latitude:</label><input type="text" name="lat" />
+        <label>Longitude:</label><input type="text" name="lon" />
+        <button type="submit">Save Configuration</button>
+    </form>
+    {% else %}
+    <p>No miners detected.</p>
+    {% endif %}
+</body>
+</html>

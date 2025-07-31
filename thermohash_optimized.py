@@ -17,6 +17,8 @@ import sys
 import argparse
 from datetime import datetime, timedelta
 from subprocess import Popen, PIPE, DEVNULL
+import socket
+import ipaddress
 import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
@@ -35,6 +37,36 @@ try:
 except ImportError:
     print("Warning: TensorFlow or scikit-learn not available. ML optimization disabled.")
     TF_AVAILABLE = False
+
+
+def discover_miners(subnet: str) -> List[Dict]:
+    """Scan the given subnet for ASIC miners exposing the gRPC port."""
+    miners = []
+    network = ipaddress.ip_network(subnet, strict=False)
+    for ip in network.hosts():
+        addr = str(ip)
+        try:
+            with socket.create_connection((addr, 50051), timeout=0.5):
+                # Try to detect OS via grpcurl service list
+                result = Popen(['grpcurl', '-plaintext', f'{addr}:50051', 'list'], stdout=PIPE, stderr=DEVNULL, text=True)
+                output, _ = result.communicate(timeout=5)
+                os_type = 'braiins' if 'braiins' in output.lower() else 'luxos' if 'lux' in output.lower() else 'unknown'
+                miners.append({'address': addr, 'os': os_type})
+        except Exception:
+            continue
+    return miners
+
+
+def detect_local_subnet() -> str:
+    """Guess the local /24 subnet based on the primary network interface."""
+    try:
+        ip = socket.gethostbyname(socket.gethostname())
+        parts = ip.split('.')
+        if len(parts) == 4:
+            return '.'.join(parts[:3]) + '.0/24'
+    except Exception:
+        pass
+    return '192.168.1.0/24'
 
 class GeolocationService:
     """Handles automatic geolocation detection based on IP address"""
@@ -643,12 +675,13 @@ class PowerOptimizer:
             return None
 
 class MinerController:
-    """Handles miner communication and power management"""
-    
-    def __init__(self, miner_address: str, username: str, password: str):
+    """Handles miner communication and power management for a single miner."""
+
+    def __init__(self, miner_address: str, username: str, password: str, os_type: str = "braiins"):
         self.miner_address = miner_address
         self.username = username
         self.password = password
+        self.os_type = os_type.lower()
         self.current_token = None
         self.token_expiry = None
         
@@ -659,10 +692,13 @@ class MinerController:
         
         try:
             auth_data = json.dumps({"username": self.username, "password": self.password})
+            service = 'braiins.bos.v1.AuthenticationService/Login'
+            if self.os_type == 'luxos':
+                service = 'luxor.firmware.v1.AuthenticationService/Login'
             auth_command = [
                 'grpcurl', '-plaintext', '-d', auth_data,
                 f'{self.miner_address}:50051',
-                'braiins.bos.v1.AuthenticationService/Login'
+                service
             ]
             
             process = Popen(auth_command, stdout=PIPE, stderr=PIPE, text=True)
@@ -697,12 +733,16 @@ class MinerController:
                 "save_action": 2
             })
             
+            service = 'braiins.bos.v1.PerformanceService/SetPowerTarget'
+            if self.os_type == 'luxos':
+                service = 'luxor.firmware.v1.PerformanceService/SetPowerTarget'
+
             set_command = [
                 'grpcurl', '-plaintext',
                 '-H', f'authorization:{token}',
                 '-d', power_data,
                 f'{self.miner_address}:50051',
-                'braiins.bos.v1.PerformanceService/SetPowerTarget'
+                service
             ]
             
             process = Popen(set_command, stdout=PIPE, stderr=PIPE, text=True)
@@ -718,6 +758,29 @@ class MinerController:
         except Exception as e:
             logging.error(f"Error setting power target: {e}")
             return False
+
+
+class MultiMinerController:
+    """Manage a fleet of MinerController instances."""
+
+    def __init__(self, miners: List[Dict]):
+        self.controllers = []
+        for m in miners:
+            self.controllers.append(
+                MinerController(
+                    m.get("address"),
+                    m.get("username", "root"),
+                    m.get("password", ""),
+                    m.get("os", "braiins"),
+                )
+            )
+
+    def set_power_target(self, power_target: int) -> bool:
+        """Set power target on all miners; returns True if all succeed."""
+        results = []
+        for c in self.controllers:
+            results.append(c.set_power_target(power_target))
+        return all(results)
 
 class ThermoHashOptimized:
     """Main ThermoHash application with ML optimization and auto-geolocation"""
@@ -755,12 +818,23 @@ class ThermoHashOptimized:
         self.financial_service = FinancialDataService()
         
         self.power_optimizer = PowerOptimizer() if TF_AVAILABLE else None
-        
-        self.miner_controller = MinerController(
-            self.config["miner_address"],
-            os.getenv("MINER_USERNAME", self.config["username"]),
-            os.getenv("MINER_PASSWORD", self.config["password"])
-        )
+
+        # Initialize miner controller(s)
+        if "miners" in self.config:
+            self.miner_controller = MultiMinerController(self.config["miners"])
+        else:
+            # Auto-discover miners on local network when list not provided
+            subnet = self.config.get("subnet", detect_local_subnet())
+            discovered = discover_miners(subnet)
+            if discovered:
+                self.config["miners"] = discovered
+                self.miner_controller = MultiMinerController(discovered)
+            else:
+                self.miner_controller = MinerController(
+                    self.config["miner_address"],
+                    os.getenv("MINER_USERNAME", self.config["username"]),
+                    os.getenv("MINER_PASSWORD", self.config["password"])
+                )
         
         self.temp_thresholds = {
             float(k): float(v) for k, v in self.config["temp_thresholds"].items()
@@ -834,10 +908,19 @@ class ThermoHashOptimized:
                 config = json.load(config_file)
                 
             # Validate required keys (latitude/longitude now optional for auto-detection)
-            required_keys = ["miner_address", "username", "password", "temp_thresholds"]
+            required_keys = ["temp_thresholds"]
             for key in required_keys:
                 if key not in config:
                     raise ValueError(f"Missing required config key: {key}")
+
+            # Backwards compatibility: single miner fields or new miners list
+            if "miners" not in config:
+                for key in ["miner_address", "username", "password"]:
+                    if key not in config:
+                        raise ValueError(f"Missing required config key: {key}")
+            else:
+                if not isinstance(config["miners"], list) or not config["miners"]:
+                    raise ValueError("miners must be a non-empty list")
             
             # Validate temp_thresholds
             if not isinstance(config["temp_thresholds"], dict) or not config["temp_thresholds"]:

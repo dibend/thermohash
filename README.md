@@ -16,8 +16,9 @@ From a single S19 keeping your living-room cozy to an institutional-scale blockc
 5. **Interactive Setup Wizard** – guided CLI (`wizard_setup.py`) stores API keys, detects location, previews live data.  
 6. **Cross-Platform, Single Script** – one code-base for Linux, Windows, bare-metal or containers.  
 7. **Smooth Power-Smoothing Algorithm** – eliminates rapid watt jumps, prolonging miner life.  
-8. **Comprehensive Logging & Metrics** – granular INFO/DEBUG streams plus daily profit reports.  
+8. **Comprehensive Logging & Metrics** – granular INFO/DEBUG streams plus daily profit reports.
 9. **Immersion & Heat-Reuse Ready** – validated with FogHashing, BitChimney, StealthMiner JPro+, and more.
+10. **Web-Based Setup Wizard** – run `web_wizard.py` for browser configuration and automatic miner discovery.
 
 > **Ready in 5 minutes. Saves for a lifetime.**
 
@@ -44,10 +45,13 @@ From a single S19 keeping your living-room cozy to an institutional-scale blockc
 git clone https://github.com/dibend/thermohash.git && cd thermohash
 chmod +x install.sh && ./install.sh
 
-# 2. Run the interactive wizard
+# 2. Run the interactive wizard (CLI)
 python wizard_setup.py
 
-# 3. Launch!
+# 3. Optional web wizard
+python web_wizard.py  # then open http://localhost:8000
+
+# 4. Launch!
 python thermohash_optimized.py
 ```
 *Windows users:* just double-click `install.bat`.
@@ -108,24 +112,7 @@ ThermoHash is 100 % open-source and community-driven.  If this project reduces y
 * Pull Requests welcome
 
 ---
-
-## 📸 FogHashing Heat-Recovery Gallery
-
-![FogHashing Heat-Recovery 1](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_1.jpg)
-
-![FogHashing Heat-Recovery 2](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_2.jpg)
-
-![FogHashing Heat-Recovery 3](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_3.jpg)
-
-![FogHashing Heat-Recovery 4](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_4.jpg)
-
-![FogHashing Heat-Recovery 5](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_5.jpg)
-
-![FogHashing Heat-Recovery 6](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_6.jpg)
-
-![FogHashing Heat-Recovery 7](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_7.jpg)
-
-![FogHashing Heat-Recovery 8](Fog%20Hashing%20-%20Crypto%20Mining%20Heat%20Recovery%20Guide%20%20_250305_072742_8.jpg)
+<!-- FogHashing gallery removed to keep repository size small -->
 
 ---
 

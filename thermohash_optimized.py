@@ -705,6 +705,19 @@ class MinerController:
             output, error = process.communicate(timeout=30)
             
             if process.returncode == 0:
+                # Try JSON body first (newer Braiins OS versions return token in response body)
+                try:
+                    body_json = json.loads(output.strip() or '{}')
+                    if isinstance(body_json, dict) and body_json.get("token"):
+                        token = str(body_json["token"])
+                        self.current_token = token
+                        self.token_expiry = datetime.now() + timedelta(hours=1)
+                        logging.debug("Authentication successful (token extracted from JSON body)")
+                        return token
+                except json.JSONDecodeError:
+                    # Not a JSON body, fall back to legacy header parsing below
+                    pass
+
                 for line in output.split('\n'):
                     if "authorization" in line:
                         token = line.split(": ")[1].strip().strip('"')

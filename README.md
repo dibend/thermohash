@@ -32,7 +32,7 @@ From a single S19 keeping your living-room cozy to an institutional-scale blockc
 
 ## 🏭 For the Industrial Datacenter
 
-* **Multi-Miner Scaling** – drop-in support for Braiins OS & LuxOS fleets (gRPC API).
+* **Multi-Miner Scaling** – drop-in support for Braiins OS (gRPC) & LuxOS (TCP API) fleets.
 * **Financial Guardrails** – pause or reduce power when profit margins dip below your SLA.
 * **Ops Friendly** – systemd services, Prometheus-ready logs, and REST hooks (coming soon).
 
@@ -80,10 +80,19 @@ Notes:
 | Weather Intelligence | IP geolocation, OpenMeteo 72-h forecast, humidity & wind analysis |
 | Machine Learning | 32→16→8→1 dense NN, auto-retraining every 7 days, >20 % efficiency gain |
 | Financial Insight | CoinGecko price feed, Luxor hashprice, profitability-aware throttling |
-| Power Control | gRPC `SetPowerTarget`, exponential smoothing, multi-level fallback |
+| Power Control | gRPC `SetPowerTarget` (Braiins) / TCP `set_power_limit` (LuxOS), exponential smoothing, multi-level fallback |
 | Installation | Automated scripts, virtual-envs, env-var secret storage |
 | Logging & Monitoring | JSON logs, rotating files, optional Prometheus exporter |
 | Compatibility | Braiins OS, LuxOS, BitChimney, StealthMiner, immersion tanks |
+
+---
+
+### Firmware API Support
+
+ThermoHash interfaces with miner firmware using two protocols:
+
+* **Braiins OS** – communicates over gRPC using the official BOSminer PAPI endpoints (`braiins.bos.v1.AuthenticationService/Login` and `braiins.bos.v1.PerformanceService/SetPowerTarget`). See the [Braiins PAPI docs](https://academy.braiins.com/en/braiins-os/papi-bosminer/).
+* **LuxOS (Luxor)** – speaks a CGMiner-style TCP API on port `4028`. Refer to Luxor's [firmware API documentation](https://docs.luxor.tech/firmware/api/intro). LuxOS does **not** use BOSminer or gRPC.
 
 ---
 

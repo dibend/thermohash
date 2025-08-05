@@ -40,20 +40,34 @@ except ImportError:
 
 
 def discover_miners(subnet: str) -> List[Dict]:
-    """Scan the given subnet for ASIC miners exposing the gRPC port."""
+    """Scan the given subnet for ASIC miners using gRPC (Braiins) or TCP (LuxOS)."""
     miners = []
     network = ipaddress.ip_network(subnet, strict=False)
     for ip in network.hosts():
         addr = str(ip)
+
+        # First, try the gRPC port used by Braiins OS
         try:
             with socket.create_connection((addr, 50051), timeout=0.5):
-                # Try to detect OS via grpcurl service list
                 result = Popen(['grpcurl', '-plaintext', f'{addr}:50051', 'list'], stdout=PIPE, stderr=DEVNULL, text=True)
                 output, _ = result.communicate(timeout=5)
-                os_type = 'braiins' if 'braiins' in output.lower() else 'luxos' if 'lux' in output.lower() else 'unknown'
-                miners.append({'address': addr, 'os': os_type})
+                if 'braiins' in output.lower():
+                    miners.append({'address': addr, 'os': 'braiins'})
+                    continue
+        except Exception:
+            pass
+
+        # Fall back to the standard TCP API port used by LuxOS (cgminer style)
+        try:
+            with socket.create_connection((addr, 4028), timeout=0.5) as s:
+                s.send(b'{"command":"version"}\n')
+                s.settimeout(1.0)
+                data = s.recv(1024).decode().lower()
+                if 'luxos' in data or 'luxor' in data:
+                    miners.append({'address': addr, 'os': 'luxos'})
         except Exception:
             continue
+
     return miners
 
 
@@ -677,6 +691,13 @@ class PowerOptimizer:
 class MinerController:
     """Handles miner communication and power management for a single miner."""
 
+    # gRPC service names sourced from Braiins OS PAPI docs:
+    #   https://academy.braiins.com/en/braiins-os/papi-bosminer/
+    BRAIINS_SERVICES = {
+        "auth": "braiins.bos.v1.AuthenticationService/Login",
+        "power": "braiins.bos.v1.PerformanceService/SetPowerTarget",
+    }
+
     def __init__(self, miner_address: str, username: str, password: str, os_type: str = "braiins"):
         self.miner_address = miner_address
         self.username = username
@@ -686,24 +707,26 @@ class MinerController:
         self.token_expiry = None
         
     def authenticate(self) -> Optional[str]:
-        """Authenticate and get session token with platform-specific handling"""
+        """Authenticate and get session token (Braiins OS only)."""
+        if self.os_type == 'luxos':
+            logging.debug("LuxOS TCP API requires no authentication")
+            return None
+
         if self.current_token and self.token_expiry and datetime.now() < self.token_expiry:
             return self.current_token
-        
+
         try:
             auth_data = json.dumps({"username": self.username, "password": self.password})
-            service = 'braiins.bos.v1.AuthenticationService/Login'
-            if self.os_type == 'luxos':
-                service = 'luxor.firmware.v1.AuthenticationService/Login'
+            service = self.BRAIINS_SERVICES["auth"]
             auth_command = [
                 'grpcurl', '-plaintext', '-d', auth_data,
                 f'{self.miner_address}:50051',
                 service
             ]
-            
+
             process = Popen(auth_command, stdout=PIPE, stderr=PIPE, text=True)
             output, error = process.communicate(timeout=30)
-            
+
             if process.returncode == 0:
                 # Try JSON body first (newer Braiins OS versions return token in response body)
                 try:
@@ -727,28 +750,40 @@ class MinerController:
                         return token
             else:
                 logging.error(f"Authentication failed: {error}")
-                
+
         except Exception as e:
             logging.error(f"Authentication error: {e}")
-        
+
         return None
     
     def set_power_target(self, power_target: int) -> bool:
-        """Set miner power target with enhanced error handling"""
+        """Set miner power target with enhanced error handling."""
+        if self.os_type == 'luxos':
+            try:
+                cmd = {"command": "set_power_limit", "parameter": str(power_target)}
+                with socket.create_connection((self.miner_address, 4028), timeout=10) as s:
+                    s.send(json.dumps(cmd).encode() + b'\n')
+                    s.settimeout(5)
+                    response = s.recv(4096).decode()
+                    if response:
+                        logging.info(f"LuxOS power target set to {power_target}W")
+                        return True
+            except Exception as e:
+                logging.error(f"LuxOS power target failed: {e}")
+            return False
+
         token = self.authenticate()
         if not token:
             logging.error("Cannot set power target: authentication failed")
             return False
-        
+
         try:
             power_data = json.dumps({
                 "power_target": {"watt": power_target},
                 "save_action": 2
             })
-            
-            service = 'braiins.bos.v1.PerformanceService/SetPowerTarget'
-            if self.os_type == 'luxos':
-                service = 'luxor.firmware.v1.PerformanceService/SetPowerTarget'
+
+            service = self.BRAIINS_SERVICES["power"]
 
             set_command = [
                 'grpcurl', '-plaintext',
@@ -757,17 +792,17 @@ class MinerController:
                 f'{self.miner_address}:50051',
                 service
             ]
-            
+
             process = Popen(set_command, stdout=PIPE, stderr=PIPE, text=True)
             output, error = process.communicate(timeout=30)
-            
+
             if process.returncode == 0:
                 logging.info(f"Power target successfully set to {power_target} watts")
                 return True
             else:
                 logging.error(f"Failed to set power target: {error}")
                 return False
-                
+
         except Exception as e:
             logging.error(f"Error setting power target: {e}")
             return False

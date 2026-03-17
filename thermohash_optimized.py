@@ -735,31 +735,40 @@ class MinerController:
     def _send_whatsminer_command(self, cmd: str, params: Optional[dict] = None) -> dict:
         """Executes a Whatsminer V3 API command securely and efficiently."""
         port = 4433
-        ts = int(datetime.now().timestamp())
         
-        # Optimization: Cache the salt for 5 minutes (300 seconds) to avoid double-polling
-        if cmd != "get.device.info":
+        # 1. Handle Read-Only Commands (No auth/salt required)
+        if cmd.startswith("get."):
+            payload = {
+                "cmd": cmd,
+                "param": params or {}
+            }
+            
+        # 2. Handle Write Commands (Requires salt, token, and timestamp)
+        else:
+            ts = int(datetime.now().timestamp())
+            
+            # Fetch and cache the salt for 5 minutes (300 seconds)
             if not self._whatsminer_salt or (ts - self._salt_timestamp > 300):
                 salt_resp = self._send_whatsminer_command("get.device.info")
                 self._whatsminer_salt = salt_resp.get("msg", {}).get("salt", "")
                 self._salt_timestamp = ts
+            
             salt = self._whatsminer_salt
-        else:
-            salt = ""
 
-        # Generate Token: First 8 chars of Base64(SHA256(cmd + pwd + salt + ts))
-        auth_str = f"{cmd}{self.password}{salt}{ts}"
-        hash_digest = hashlib.sha256(auth_str.encode('utf-8')).digest()
-        token = base64.b64encode(hash_digest).decode('utf-8')[:8]
+            # Generate Token: First 8 chars of Base64(SHA256(cmd + pwd + salt + ts))
+            auth_str = f"{cmd}{self.password}{salt}{ts}"
+            hash_digest = hashlib.sha256(auth_str.encode('utf-8')).digest()
+            token = base64.b64encode(hash_digest).decode('utf-8')[:8]
 
-        payload = {
-            "cmd": cmd,
-            "account": self.wm_account,
-            "ts": ts,
-            "token": token,
-            "param": params or {}
-        }
+            payload = {
+                "cmd": cmd,
+                "account": self.wm_account,
+                "ts": ts,
+                "token": token,
+                "param": params or {}
+            }
 
+        # 3. Pack and Send
         json_payload = json.dumps(payload).encode('utf-8')
         header = struct.pack("<I", len(json_payload)) # 4-byte little-endian length
 

@@ -1,5 +1,5 @@
 # ThermoHash 🌡️– AI-Powered Bitcoin Miner & Heat-Reuse Platform
-
+ChatGPT garbage code untested send S19 K Pro or newer and smaller Nanometer TSMC to make work
 [![GitHub Sponsors](https://img.shields.io/github/sponsors/dibend?style=social)](https://github.com/sponsors/dibend)
 [![License](https://img.shields.io/github/license/dibend/thermohash)](LICENSE)
 

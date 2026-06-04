@@ -23,6 +23,9 @@ import numpy as np
 import pandas as pd
 from typing import Dict, List, Tuple, Optional
 import warnings
+import hashlib
+import base64
+import struct
 
 # Suppress TensorFlow warnings for cleaner output
 warnings.filterwarnings('ignore', category=FutureWarning)
@@ -700,11 +703,101 @@ class MinerController:
 
     def __init__(self, miner_address: str, username: str, password: str, os_type: str = "braiins"):
         self.miner_address = miner_address
-        self.username = username
         self.password = password
         self.os_type = os_type.lower()
+        
+        # Braiins OS state
+        self.username = username
         self.current_token = None
         self.token_expiry = None
+        
+        # Whatsminer API V3 state
+        self._whatsminer_salt = ""
+        self._salt_timestamp = 0
+
+        # MicroBT deprecated 'admin'. Enforce valid accounts for Whatsminer.
+        if self.os_type == 'whatsminer' and self.username in ['root', 'admin']:
+            logging.warning("Whatsminer API V3 deprecates the 'admin' account. Defaulting to 'user1'.")
+            self.wm_account = "user1"
+        else:
+            self.wm_account = self.username
+
+    def _read_exact(self, sock: socket.socket, num_bytes: int) -> Optional[bytes]:
+        """Helper to ensure we read exactly the requested number of bytes to prevent JSON truncation."""
+        data = bytearray()
+        while len(data) < num_bytes:
+            packet = sock.recv(num_bytes - len(data))
+            if not packet:
+                return None  # Connection closed prematurely
+            data.extend(packet)
+        return bytes(data)
+
+    def _send_whatsminer_command(self, cmd: str, params: Optional[dict] = None) -> dict:
+        """Executes a Whatsminer V3 API command securely and efficiently."""
+        port = 4433
+        
+        # 1. Handle Read-Only Commands (No auth/salt required)
+        if cmd.startswith("get."):
+            payload = {
+                "cmd": cmd,
+                "param": params or {}
+            }
+            
+        # 2. Handle Write Commands (Requires salt, token, and timestamp)
+        else:
+            ts = int(datetime.now().timestamp())
+            
+            # Fetch and cache the salt for 5 minutes (300 seconds)
+            if not self._whatsminer_salt or (ts - self._salt_timestamp > 300):
+                salt_resp = self._send_whatsminer_command("get.device.info")
+                self._whatsminer_salt = salt_resp.get("msg", {}).get("salt", "")
+                self._salt_timestamp = ts
+            
+            salt = self._whatsminer_salt
+
+            # Generate Token: First 8 chars of Base64(SHA256(cmd + pwd + salt + ts))
+            auth_str = f"{cmd}{self.password}{salt}{ts}"
+            hash_digest = hashlib.sha256(auth_str.encode('utf-8')).digest()
+            token = base64.b64encode(hash_digest).decode('utf-8')[:8]
+
+            payload = {
+                "cmd": cmd,
+                "account": self.wm_account,
+                "ts": ts,
+                "token": token,
+                "param": params or {}
+            }
+
+        # 3. Pack and Send
+        json_payload = json.dumps(payload).encode('utf-8')
+        header = struct.pack("<I", len(json_payload)) # 4-byte little-endian length
+
+        try:
+            with socket.create_connection((self.miner_address, port), timeout=10) as s:
+                s.settimeout(5) # Prevent hanging on reads
+                s.sendall(header + json_payload)
+                
+                # 1. Read 4-byte response length
+                resp_header = self._read_exact(s, 4)
+                if not resp_header:
+                    return {}
+                resp_len = struct.unpack("<I", resp_header)[0]
+                
+                # 2. Read full payload exactly
+                response_data = self._read_exact(s, resp_len)
+                if not response_data:
+                    return {}
+                
+                return json.loads(response_data.decode('utf-8'))
+                
+        except json.JSONDecodeError:
+            logging.error(f"Whatsminer API Error: Miner {self.miner_address} returned malformed JSON.")
+        except socket.timeout:
+            logging.error(f"Whatsminer API Error: Connection to {self.miner_address} timed out.")
+        except Exception as e:
+            logging.error(f"Whatsminer API Error on {self.miner_address}: {e}")
+            
+        return {}
         
     def authenticate(self) -> Optional[str]:
         """Authenticate and get session token (Braiins OS only)."""
@@ -757,7 +850,19 @@ class MinerController:
         return None
     
     def set_power_target(self, power_target: int) -> bool:
-        """Set miner power target with enhanced error handling."""
+        """Sets power target across Braiins, LuxOS, and Whatsminer."""
+        
+        if self.os_type == 'whatsminer':
+            # Note: Do not exceed the machine factory power or it will not take effect.
+            resp = self._send_whatsminer_command("set.miner.power", {"watt": power_target})
+            
+            if resp.get("code") == 0:
+                logging.info(f"Whatsminer power successfully set to {power_target}W")
+                return True
+                
+            logging.error(f"Whatsminer failed to set power: {resp.get('msg')} (Code: {resp.get('code')})")
+            return False
+        
         if self.os_type == 'luxos':
             try:
                 cmd = {"command": "set_power_limit", "parameter": str(power_target)}
